@@ -1,0 +1,40 @@
+{
+  "name": "nai-vibe-mcp",
+  "version": "0.1.0",
+  "description": "말로 NovelAI 짤뽑 — NovelAI 이미지 생성을 Claude 등 MCP 앱에서 쓰게 해 주는 비공식 MCP 서버",
+  "license": "MIT",
+  "author": "haru645",
+  "type": "module",
+  "bin": {
+    "nai-vibe-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "pack:mcpb": "node scripts/pack-mcpb.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "fflate": "^0.8.3",
+    "jpeg-js": "^0.4.4",
+    "pngjs": "^7.0.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@anthropic-ai/mcpb": "^2.1.2",
+    "@types/node": "^22.10.0",
+    "@types/pngjs": "^6.0.5",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

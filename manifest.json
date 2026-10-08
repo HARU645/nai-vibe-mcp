@@ -1,0 +1,106 @@
+{
+  "manifest_version": "0.3",
+  "name": "nai-vibe-mcp",
+  "display_name": "NAI 바이브 짤뽑",
+  "version": "0.0.0",
+  "description": "말로 NovelAI 그림 뽑기 — 비용 확인, 프리셋, 날짜별 저장 (비공식)",
+  "long_description": "NovelAI 이미지 생성을 Claude에서 대화로 쓰게 해 주는 비공식 MCP 서버야. 한국어로 장면을 말하면 Claude가 태그로 바꿔서 그림을 뽑고, 그림은 내 PC 폴더에 날짜별로 저장돼. Anlas가 드는 요청은 미리 예상 비용을 보여 주고 확인을 받은 뒤에만 실행해. 자주 쓰는 화풍·캐릭터는 프리셋으로 저장해 둘 수 있어.\n\n필요한 것: NovelAI 계정과 Persistent API Token (NovelAI → User Settings → Account → Get Persistent API Token). 토큰은 이 설정 창에만 넣고 채팅에는 붙여넣지 마.\n\nNovelAI/Anlatan과 관계없는 개인 프로젝트야.",
+  "author": {
+    "name": "haru645"
+  },
+  "license": "MIT",
+  "keywords": ["novelai", "image generation", "anime", "nai", "짤"],
+  "icon": "icon.png",
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.js"],
+      "env": {
+        "NAI_TOKEN": "${user_config.nai_token}",
+        "NAI_OUTPUT_DIR": "${user_config.output_dir}",
+        "NAI_DEFAULT_MODEL": "${user_config.default_model}",
+        "NAI_COST_MODE": "${user_config.cost_mode}",
+        "NAI_ALLOW_MAX": "${user_config.allow_max}",
+        "NAI_SESSION_LIMIT": "${user_config.session_limit}",
+        "NAI_MAX_COUNT": "${user_config.max_count}",
+        "NAI_UPDATE_CHECK": "${user_config.update_check}"
+      }
+    }
+  },
+  "tools": [
+    { "name": "nai_generate", "description": "NovelAI로 그림 생성 (비용 들면 먼저 확인)" },
+    { "name": "nai_account", "description": "연결 확인, 구독·Anlas 잔액·V5 할당량" },
+    { "name": "nai_preset", "description": "화풍·캐릭터·크기 프리셋 저장/조회/삭제" },
+    { "name": "nai_about", "description": "버전·업데이트·진단 정보" }
+  ],
+  "compatibility": {
+    "platforms": ["win32", "darwin", "linux"],
+    "runtimes": { "node": ">=18.17.0" }
+  },
+  "user_config": {
+    "nai_token": {
+      "type": "string",
+      "title": "NovelAI 토큰",
+      "description": "pst-로 시작하는 Persistent API Token. NovelAI → User Settings → Account → Get Persistent API Token에서 만들어.",
+      "sensitive": true,
+      "required": true
+    },
+    "output_dir": {
+      "type": "directory",
+      "title": "저장 폴더",
+      "description": "그림이 날짜별 하위 폴더로 저장되는 곳. 프리셋·기록도 이 아래 .nai-vibe 폴더에 저장돼.",
+      "default": "${HOME}/Pictures/nai-vibe",
+      "required": false
+    },
+    "default_model": {
+      "type": "string",
+      "title": "기본 모델",
+      "description": "v4.5-full, v4.5-curated, v5-full, v5-curated 중 하나. Opus라면 v4.5는 조건 안에서 무제한 무료, v5는 회복형 할당량에서 차감돼.",
+      "default": "v4.5-full",
+      "required": false
+    },
+    "cost_mode": {
+      "type": "string",
+      "title": "비용 모드",
+      "description": "confirm(추천): 무료면 바로, Anlas가 들면 먼저 물어봄 / free_only: 무료만 / allow: 아래 '자동 허용 상한'까지는 묻지 않음",
+      "default": "confirm",
+      "required": false
+    },
+    "allow_max": {
+      "type": "number",
+      "title": "자동 허용 상한 (allow 모드)",
+      "description": "allow 모드에서 묻지 않고 쓰는 요청 하나의 최대 Anlas",
+      "default": 30,
+      "min": 0,
+      "max": 10000,
+      "required": false
+    },
+    "session_limit": {
+      "type": "number",
+      "title": "세션 Anlas 상한",
+      "description": "앱을 켜 둔 동안 쓸 수 있는 Anlas 합계. 넘으면 확인을 받아도 막아. 0이면 상한 없음.",
+      "default": 1000,
+      "min": 0,
+      "max": 1000000,
+      "required": false
+    },
+    "max_count": {
+      "type": "number",
+      "title": "한 번에 뽑는 최대 장 수",
+      "description": "한 요청에서 순서대로 뽑을 수 있는 최대 장 수 (1~8)",
+      "default": 4,
+      "min": 1,
+      "max": 8,
+      "required": false
+    },
+    "update_check": {
+      "type": "boolean",
+      "title": "새 버전 알림",
+      "description": "하루 한 번 GitHub에서 최신 버전 번호만 확인해서 알려 줘 (보내는 정보 없음)",
+      "default": true,
+      "required": false
+    }
+  }
+}
