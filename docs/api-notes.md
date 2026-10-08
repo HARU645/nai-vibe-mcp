@@ -115,7 +115,7 @@ tag_hint_uc_preset 번호: 0 없음 / 2 Heavy / 3 Light / 4 Human Focus / 5 Furr
 - V5·V4.5 Full Human Focus: Heavy + `, @_@, mismatched pupils, glowing eyes, bad anatomy`
 - V4.5 Curated (NekoAI-JS): Heavy `blurry, lowres, upscaled, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks, negative space, blank page` / Light `blurry, lowres, upscaled, artistic error, scan artifacts, jpeg artifacts, logo, too many watermarks, negative space, blank page` / Human Focus는 Heavy에 `bad anatomy, bad hands`, `@_@, mismatched pupils, glowing eyes`가 중간중간 끼어 있는 형태 (순서가 달라서 구현할 땐 NekoAI-JS 원문 그대로 복사)
 - 문자열은 MooshieUI(웹 번들에서 옮김)·NekoAI-JS 기준. 1단계 구현할 때 공식 UC 문서 원문과 한 번 더 대조
-- **`nsfw` 가드**: 웹 클라이언트는 Full 모델에서 UC 프리셋이 켜져 있고 프롬프트·UC 어디에도 `nsfw`가 없으면 UC 맨 앞에 `nsfw, `를 붙임 (Curated는 원래 SFW라 안 붙임). 공식 UC 문서 표에는 nsfw가 없고, NekoAI-JS는 V4.5 프리셋 문자열 안에 넣어 둠 → 결과는 같음. 우리도 웹과 같게
+- **`nsfw` 가드**: 웹 클라이언트는 Full 모델에서 UC 프리셋이 켜져 있고 프롬프트·UC 어디에도 `nsfw`가 없으면 UC 맨 앞에 `nsfw, `를 붙임 (Curated는 원래 SFW라 안 붙임). 공식 UC 문서 표에는 nsfw가 없고, NekoAI-JS는 V4.5 프리셋 문자열 안에 넣어 둠 → 결과는 같음. 우리도 웹과 같게 기본으로 붙이고, 설정 `NAI_NSFW_GUARD=false`로 끌 수 있게 함 (v0.1.2)
 
 ### 4-3. 그 밖의 문법
 
