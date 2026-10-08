@@ -99,6 +99,7 @@ V5는 같은 크기에서 V4.5보다 1.5배 비싸.
 | 자동 허용 상한 | 30 | allow 모드에서 묻지 않는 한 요청의 최대 Anlas |
 | 세션 Anlas 상한 | 1000 | 0이면 없음 |
 | 한 번에 뽑는 최대 장 수 | 4 | 1~8 |
+| 기본 nsfw 가드 | 켜짐 | Full 모델에서 NovelAI 웹처럼 기본 네거티브 앞에 `nsfw`를 붙여서, 평범한 프롬프트가 수위 쪽으로 새지 않게 함 |
 | 새 버전 알림 | 켜짐 | 하루 한 번 GitHub 최신 버전 번호만 확인 |
 
 ## 파일
@@ -142,7 +143,7 @@ Claude 데스크톱 말고도 **로컬(stdio) MCP**를 지원하는 앱이면 �
 - ChatGPT 웹·Grok 웹/앱은 인터넷에 열린(https) 서버만 붙일 수 있어서 지금은 못 써.
 - npm 패키지·Windows 실행 파일(.exe)은 준비 중이야.
 
-환경변수: `NAI_TOKEN`, `NAI_OUTPUT_DIR`, `NAI_DEFAULT_MODEL`, `NAI_COST_MODE`, `NAI_ALLOW_MAX`, `NAI_SESSION_LIMIT`, `NAI_MAX_COUNT`, `NAI_UPDATE_CHECK`
+환경변수: `NAI_TOKEN`, `NAI_OUTPUT_DIR`, `NAI_DEFAULT_MODEL`, `NAI_COST_MODE`, `NAI_ALLOW_MAX`, `NAI_SESSION_LIMIT`, `NAI_MAX_COUNT`, `NAI_NSFW_GUARD`, `NAI_UPDATE_CHECK`
 
 ## 자주 묻는 것
 

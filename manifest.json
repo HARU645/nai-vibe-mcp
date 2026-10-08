@@ -33,6 +33,7 @@
         "NAI_ALLOW_MAX": "${user_config.allow_max}",
         "NAI_SESSION_LIMIT": "${user_config.session_limit}",
         "NAI_MAX_COUNT": "${user_config.max_count}",
+        "NAI_NSFW_GUARD": "${user_config.nsfw_guard}",
         "NAI_UPDATE_CHECK": "${user_config.update_check}"
       }
     }
@@ -118,6 +119,13 @@
       "default": 4,
       "min": 1,
       "max": 8,
+      "required": false
+    },
+    "nsfw_guard": {
+      "type": "boolean",
+      "title": "기본 nsfw 가드 (NovelAI 웹 기본값)",
+      "description": "Full 모델에서 기본 네거티브 앞에 nsfw를 붙여서, 평범한 프롬프트가 수위 쪽으로 새지 않게 해. NovelAI 웹도 기본으로 이렇게 해. 끄면 이 보정이 빠져.",
+      "default": true,
       "required": false
     },
     "update_check": {

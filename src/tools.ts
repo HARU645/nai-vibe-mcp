@@ -347,6 +347,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
         `default_model: ${config.defaultModel.key}`,
         `cost_mode: ${config.costMode}, allow_max: ${config.allowMax}, session_limit: ${config.sessionLimit}, max_count: ${config.maxCount}`,
         `session_spent: ${ctx.guard.sessionSpent}`,
+        `nsfw_guard: ${config.nsfwGuard}`,
         `update_check: ${config.updateCheck}`,
         `api_base: ${config.apiBase === "https://image.novelai.net" ? "기본" : "변경됨"}`,
         ...(config.warnings.length ? [`warnings: ${config.warnings.join(" / ")}`] : []),

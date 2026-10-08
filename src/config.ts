@@ -15,6 +15,8 @@ export interface Config {
   allowMax: number;
   sessionLimit: number;
   maxCount: number;
+  /** Full 모델에서 웹처럼 UC 앞에 `nsfw`를 붙일지 (기본 켜짐) */
+  nsfwGuard: boolean;
   updateCheck: boolean;
   apiBase: string;
   timeoutMs: number;
@@ -79,6 +81,7 @@ export function loadConfig(e: NodeJS.ProcessEnv = process.env): Config {
     allowMax: num("NAI_ALLOW_MAX", e, 30, 0, 10_000, warnings),
     sessionLimit: num("NAI_SESSION_LIMIT", e, 1000, 0, 1_000_000, warnings),
     maxCount: num("NAI_MAX_COUNT", e, 4, 1, 8, warnings),
+    nsfwGuard: !/^(0|false|off|no)$/i.test(env("NAI_NSFW_GUARD", e) ?? "true"),
     updateCheck: !/^(0|false|off|no)$/i.test(env("NAI_UPDATE_CHECK", e) ?? "true"),
     apiBase: env("NAI_API_BASE", e) ?? DEFAULT_API_BASE,
     timeoutMs: num("NAI_TIMEOUT_MS", e, 180_000, 10_000, 600_000, warnings),

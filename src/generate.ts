@@ -172,7 +172,7 @@ export async function runGenerate(args: GenerateArgs, ctx: GenerateContext): Pro
   const quality = args.quality ?? "standard";
   const ucPreset = args.uc_preset ?? "heavy";
   const composed = composePrompt(model, userPrompt, quality);
-  const negative = composeNegative(model, userNegative, composed.text, ucPreset);
+  const negative = composeNegative(model, userNegative, composed.text, ucPreset, config.nsfwGuard);
   if (!composed.text.trim()) throw new UserFacingError("프롬프트가 비어 있어.");
 
   const notes: string[] = [];

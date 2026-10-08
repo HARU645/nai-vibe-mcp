@@ -114,12 +114,17 @@ export interface ComposedNegative {
   tagHintUc: number;
 }
 
-/** UC 프리셋을 사용자 UC 앞에 붙이고, Full 모델이면 웹처럼 `nsfw` 가드를 붙인다 */
+/**
+ * UC 프리셋을 사용자 UC 앞에 붙이고, Full 모델이면 웹처럼 `nsfw` 가드를 붙인다.
+ * 가드는 요청과 상관없이 Full 모델이 평범한 프롬프트에서 수위 쪽으로 새는 걸 막는 NovelAI 웹 기본값이라
+ * 기본으로 켜 두고, 설정(NAI_NSFW_GUARD)으로만 끌 수 있다.
+ */
 export function composeNegative(
   model: ModelInfo,
   negative: string,
   finalPrompt: string,
   preset: UcPreset,
+  nsfwGuard = true,
 ): ComposedNegative {
   const user = tidyPrompt(convertWeightSyntax(negative));
   const uc = resolveUcPreset(model, preset);
@@ -127,7 +132,7 @@ export function composeNegative(
   if (uc.text) {
     if (containsText(user, uc.text)) text = user;
     else text = user ? `${uc.text}, ${user}` : uc.text;
-    if (model.nsfwGuard && !containsText(finalPrompt, "nsfw") && !containsText(text, "nsfw")) {
+    if (nsfwGuard && model.nsfwGuard && !containsText(finalPrompt, "nsfw") && !containsText(text, "nsfw")) {
       text = `nsfw, ${text}`;
     }
   }

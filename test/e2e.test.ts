@@ -140,6 +140,12 @@ describe("생성 + 비용 가드", () => {
     expect(JSON.parse(ledger.trim().split("\n").pop()!)).toMatchObject({ estimated: 17, actual: 17 });
   });
 
+  it("nsfw 가드 설정을 끄면 UC에 nsfw가 안 들어간다", async () => {
+    const { client } = await connect({ NAI_NSFW_GUARD: "false", NAI_COST_MODE: "allow", NAI_ALLOW_MAX: "100" });
+    await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } });
+    expect(fake.generateBodies()[0].parameters.negative_prompt.startsWith("lowres")).toBe(true);
+  });
+
   it("confirm_id를 다른 요청에 쓰면 실행 안 한다", async () => {
     const { client } = await connect();
     const r1: any = await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } });

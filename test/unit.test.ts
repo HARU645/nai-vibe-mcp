@@ -91,6 +91,11 @@ describe("프롬프트 조립", () => {
     expect(r.text.startsWith("blurry, lowres, upscaled")).toBe(true);
     expect(r.text.includes("nsfw")).toBe(false);
   });
+  it("가드를 끄면 nsfw를 안 붙인다", () => {
+    const r = composeNegative(m("v4.5-full"), "bad hands", "1girl", "heavy", false);
+    expect(r.text.startsWith("lowres, artistic error")).toBe(true);
+    expect(r.text.includes("nsfw")).toBe(false);
+  });
   it("none이면 사용자 UC만", () => {
     expect(composeNegative(m("v5-full"), "bad hands", "1girl", "none").text).toBe("bad hands");
   });
@@ -284,6 +289,8 @@ describe("설정", () => {
     expect(c.costMode).toBe("confirm");
     expect(c.outputDir).toMatch(/nai-vibe$/);
     expect(c.defaultModel.key).toBe("v4.5-full");
+    expect(c.nsfwGuard).toBe(true);
+    expect(loadConfig({ NAI_NSFW_GUARD: "false" }).nsfwGuard).toBe(false);
   });
   it("이상한 값은 경고하고 기본값", () => {
     const c = loadConfig({ NAI_COST_MODE: "yolo", NAI_MAX_COUNT: "99", NAI_DEFAULT_MODEL: "v9" });
