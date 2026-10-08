@@ -13,7 +13,7 @@ import { costPerImage } from "../src/cost/cost.js";
 import { resolveModel } from "../src/models.js";
 import { createServer } from "../src/server.js";
 import { makeContactSheet, sheetColumns } from "../src/sheet.js";
-import { bareTag, normalizeTag } from "../src/tags.js";
+import { bareTag, normalizeTag, splitQueries } from "../src/tags.js";
 import { TEST_TOKEN, startFakeNai } from "./fake-nai.js";
 
 type Fake = Awaited<ReturnType<typeof startFakeNai>>;
@@ -60,14 +60,15 @@ afterEach(async () => {
 });
 
 describe("태그 이름 다루기", () => {
-  it("대소문자·밑줄·이스케이프·artist: 차이를 무시한다", () => {
-    expect(normalizeTag("Artist:Ask_\\(Askzy\\)")).toBe("ask (askzy)");
+  it("대소문자·밑줄·이스케이프 차이를 무시하고 artist: 접두어는 남긴다", () => {
+    expect(normalizeTag("Artist : Ask_\\(Askzy\\)")).toBe("artist:ask (askzy)");
     expect(normalizeTag("ask (askzy)")).toBe("ask (askzy)");
   });
-  it("가중치·중괄호를 벗긴다", () => {
+  it("가중치·중괄호를 벗기고, 섞기 문자열은 태그별로 나눈다", () => {
     expect(bareTag("1.2::artist:foo::")).toBe("artist:foo");
+    expect(bareTag("1.2::artist:foo")).toBe("artist:foo");
     expect(bareTag("{{artist:foo}}")).toBe("artist:foo");
-    expect(bareTag(" artist:foo ")).toBe("artist:foo");
+    expect(splitQueries(["0.6::artist:a::, 0.4::artist:b::", "artist:a"])).toEqual(["artist:a", "artist:b"]);
   });
 });
 
@@ -123,6 +124,25 @@ describe("nai_tags", () => {
     const r: any = await client.callTool({ name: "nai_tags", arguments: { tags: ["artist:wlo"] } });
     expect(r.structuredContent.results[0].found).toBe(false);
     expect(textOf(r)).toContain("비슷한 태그: artist:wlop (5,123)");
+  });
+
+  it("artist:로 물었는데 일반 태그만 있으면 아티스트로 인정하지 않는다", async () => {
+    const { client } = await connect();
+    const r: any = await client.callTool({ name: "nai_tags", arguments: { tags: ["artist:silver hair"] } });
+    expect(r.structuredContent.results[0]).toMatchObject({ status: "general_only", found: false });
+    expect(textOf(r)).toContain("아티스트 태그로는 없음");
+  });
+
+  it("응답 형식이 바뀌면 '전부 없음' 대신 오류로 알린다", async () => {
+    const { client } = await connect();
+    fake.state.tagDb = [{ name: "artist:wlop" } as any];
+    const r: any = await client.callTool({ name: "nai_tags", arguments: { tags: ["artist:wlop", "artist:b"] } });
+    expect(r.structuredContent.results[0].status).toBe("error");
+    expect(textOf(r)).toContain("형식이 예상과 다릅니다");
+    // 전부 오류면 검색 자체를 못 쓰는 것으로
+    const all: any = await client.callTool({ name: "nai_tags", arguments: { tags: ["artist:wlop", "wlop"] } });
+    expect(all.isError).toBe(true);
+    expect(textOf(all)).toContain("태그 검색을 사용할 수 없습니다");
   });
 
   it("태그 검색이 안 되면 그렇게 알려 준다", async () => {
@@ -215,6 +235,28 @@ describe("nai_compare", () => {
 });
 
 describe("시트 번호로 프리셋 저장", () => {
+  it("전부 실패한 시트는 '가장 최근 시트'가 되지 않고, 생성 안 된 칸은 저장하지 않는다", async () => {
+    const { client, ctx } = await connect({ NAI_COST_MODE: "allow", NAI_ALLOW_MAX: "100" });
+    await client.callTool({ name: "nai_compare", arguments: { variants: [{ prompt: "artist:good1" }, { prompt: "artist:good2" }] } });
+    const okId = (await ctx.sheets.get())!.id;
+    fake.state.failures = [500];
+    const bad: any = await client.callTool({ name: "nai_compare", arguments: { variants: [{ prompt: "artist:bad1" }, { prompt: "artist:bad2" }] } });
+    expect(bad.isError).toBe(true);
+    expect((await ctx.sheets.get())!.id).toBe(okId);
+    const s: any = await client.callTool({ name: "nai_preset", arguments: { action: "save", name: "g", from_sheet: { number: 2 } } });
+    expect(textOf(s)).toContain("artist:good2");
+
+    fake.state.failures = [0, 500];
+    await client.callTool({ name: "nai_compare", arguments: { variants: [{ prompt: "artist:p1" }, { prompt: "artist:p2" }] } });
+    const partialId = (await ctx.sheets.get())!.id;
+    const no: any = await client.callTool({
+      name: "nai_preset",
+      arguments: { action: "save", name: "h", from_sheet: { number: 2, sheet: `compare_${partialId.split("_")[1]}` } },
+    });
+    expect(no.isError).toBe(true);
+    expect(textOf(no)).toContain("생성되지 않은 칸");
+  });
+
   it("고른 번호의 태그를 그대로 화풍 프리셋으로 저장하고 생성에 쓴다", async () => {
     const { client } = await connect({ NAI_COST_MODE: "allow", NAI_ALLOW_MAX: "100" });
     await client.callTool({

@@ -323,6 +323,11 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
           }
           const v = rec.variants.find((x) => x.n === want.number);
           if (!v) throw new UserFacingError(`비교 시트 ${rec.id}에는 ${want.number}번이 없습니다 (1~${rec.variants.length}번).`);
+          if (!v.file) {
+            throw new UserFacingError(
+              `비교 시트 ${rec.id}의 ${v.n}번은 생성되지 않은 칸이라 저장하지 않았습니다. 태그(${v.prompt})를 직접 prompt로 저장하거나 다시 비교해 주세요.`,
+            );
+          }
           prompt = joinTags(v.prompt, args.prompt);
           kind = kind ?? "style";
           note = note ?? `비교 시트 ${rec.id}의 ${v.n}번 (${resolveModel(rec.model)?.label ?? rec.model}, 시드 ${rec.seed})`;
@@ -372,7 +377,8 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
       description: [
         "태그(특히 아티스트 태그)가 NovelAI에 실제로 있는지 NovelAI 웹 자동완성으로 확인한다. Anlas가 들지 않는다.",
         "아티스트 태그를 추천하거나 비교 시트에 넣기 전에 확인해서, 없거나 철자가 틀린 태그는 빼거나 suggestions의 태그로 고친다.",
-        "count는 NovelAI가 알려 주는 태그 수(클수록 모델이 잘 아는 편), confidence는 0~1.",
+        "count는 NovelAI가 알려 주는 태그 수(클수록 모델이 잘 아는 편), confidence는 0~1. status: found | general_only(artist:로 물었는데 같은 이름의 일반 태그만 있음 → 아티스트로 쓰지 않음) | not_found | error.",
+        "섞기 문자열(0.6::artist:a::, 0.4::artist:b::)을 넣으면 태그별로 나눠 확인한다.",
       ].join("\n"),
       inputSchema: {
         tags: z.array(z.string().min(1)).min(1).max(20).describe("확인할 태그. 아티스트는 artist:이름 (예: artist:wlop)"),
@@ -401,12 +407,22 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
         }
         const lines = [`태그 확인 (NovelAI 자동완성, ${model.label}):`];
         for (const t of results) {
-          if (t.found && t.match) {
-            lines.push(`✅ ${t.query} — 있음 (수 ${fmt(t.match.count)} · 신뢰도 ${t.match.confidence.toFixed(2)})`);
+          const near = t.suggestions.map((x) => `${x.tag} (${fmt(x.count)})`).join(", ");
+          if (t.status === "found" && t.match) {
+            const same = t.match.tag.toLowerCase() === t.query.toLowerCase();
+            lines.push(
+              `✅ ${t.query} — 있음${same ? "" : ` (NovelAI 표기: ${t.match.tag})`} · 수 ${fmt(t.match.count)} · 신뢰도 ${t.match.confidence.toFixed(2)}`,
+            );
+          } else if (t.status === "general_only" && t.match) {
+            lines.push(`⚠️ ${t.query} — 아티스트 태그로는 없음. 같은 이름의 일반 태그(${t.match.tag})만 있습니다`);
+          } else if (t.status === "error") {
+            lines.push(`❔ ${t.query} — 확인 중 오류: ${t.error}`);
           } else {
-            const near = t.suggestions.map((x) => `${x.tag} (${fmt(x.count)})`).join(", ");
             lines.push(`❌ ${t.query} — 없음${near ? `. 비슷한 태그: ${near}` : " (비슷한 태그도 없음)"}`);
           }
+        }
+        if (results.length > 1 && results.every((t) => t.status === "not_found" && t.suggestions.length === 0)) {
+          lines.push("모든 태그가 빈 결과입니다. NovelAI 태그 검색이 바뀌었을 수 있으니 비교 시트로 직접 확인해 주세요.");
         }
         const msg = withNotice(lines, ctx);
         return {
@@ -416,11 +432,13 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
             model: model.key,
             results: results.map((t) => ({
               query: t.query,
+              status: t.status,
               found: t.found,
               tag: t.match?.tag,
               count: t.match?.count,
               confidence: t.match?.confidence,
               suggestions: t.suggestions,
+              error: t.error,
             })),
           },
         };

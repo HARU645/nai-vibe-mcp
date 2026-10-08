@@ -328,7 +328,7 @@ export async function runJobs(
       done.push({ index, png, image: { path: file, seed: job.seed, width: r.size.width, height: r.size.height, preview } });
       await ctx.history
         .addImage({
-          id: `${date}-${time}-${job.seed}`,
+          id: `${date}-${time}-${job.fileBase ?? job.seed}`,
           time: new Date().toISOString(),
           file,
           model: r.model.key,

@@ -67,11 +67,14 @@ export class SheetStore {
     return out;
   }
 
-  /** id를 안 주면 가장 최근 시트. id는 전체(2026-10-08_153012)나 시각 부분(153012)으로 찾는다 */
+  /**
+   * id를 안 주면 그림이 한 장이라도 나온 가장 최근 시트.
+   * id는 전체(2026-10-08_153012), 시각 부분(153012), 폴더 이름(compare_153012)으로 찾는다
+   */
   async get(id?: string): Promise<SheetRecord | undefined> {
     const all = await this.recent(500);
-    if (!id) return all[0];
-    const want = id.trim();
+    if (!id) return all.find((r) => r.variants.some((v) => v.file));
+    const want = id.trim().replace(/^compare_/, "");
     return all.find((r) => r.id === want) ?? all.find((r) => r.id.endsWith(`_${want}`));
   }
 }

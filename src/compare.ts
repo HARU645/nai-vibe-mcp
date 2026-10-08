@@ -139,37 +139,42 @@ export async function runCompare(args: CompareArgs, ctx: GenerateContext): Promi
   if (done.length > 0) {
     try {
       sheet = makeContactSheet(done.map((d) => ({ png: d.png, number: d.index + 1 })));
-      sheetFile = path.join(dir, "sheet.jpg");
-      await writeFileAtomic(sheetFile, sheet.data);
-      const legend = [
-        `비교 시트 ${sheetId} — ${r.model.label}, ${r.size.width}x${r.size.height}, ${r.steps}스텝, 시드 ${seed}`,
-        `공통 프롬프트: ${joinTags(r.presetPrompt, basePrompt)}`,
-        "",
-        ...outVariants.map((v) => `${v.n}. ${v.prompt}${v.label !== v.prompt ? `  (${v.label})` : ""}${v.file ? "" : "  — 생성 안 됨"}`),
-        "",
-      ].join("\r\n");
-      await writeFileAtomic(path.join(dir, "sheet.txt"), legend);
+      const file = path.join(dir, "sheet.jpg");
+      await writeFileAtomic(file, sheet.data);
+      sheetFile = file;
     } catch (e) {
       notes.push(`비교 시트 이미지를 만들지 못했습니다 (개별 그림은 저장되었습니다): ${(e as Error)?.message ?? String(e)}`);
       sheet = undefined;
     }
-  }
+    const oneLine = (t: string) => t.replace(/\r?\n/g, " ");
+    const legend = [
+      `비교 시트 ${sheetId} — ${r.model.label}, ${r.size.width}x${r.size.height}, ${r.steps}스텝, 시드 ${seed}`,
+      `공통 프롬프트: ${oneLine(joinTags(r.presetPrompt, basePrompt))}`,
+      "",
+      ...outVariants.map(
+        (v) => `${v.n}. ${oneLine(v.prompt)}${v.label !== v.prompt ? `  (${oneLine(v.label)})` : ""}${v.file ? "" : "  — 생성 안 됨"}`,
+      ),
+      "",
+    ].join("\r\n");
+    await writeFileAtomic(path.join(dir, "sheet.txt"), legend).catch(() => notes.push("sheet.txt(번호 대응표)를 저장하지 못했습니다."));
 
-  const record: SheetRecord = {
-    id: sheetId,
-    time: new Date().toISOString(),
-    dir,
-    sheetFile,
-    model: r.model.key,
-    width: r.size.width,
-    height: r.size.height,
-    steps: r.steps,
-    seed,
-    basePrompt,
-    presets: r.presetNames,
-    variants: outVariants.map(({ n, label, prompt, file }) => ({ n, label, prompt, file })),
-  };
-  await ctx.sheets.add(record).catch(() => notes.push("비교 시트 기록을 저장하지 못했습니다."));
+    // 시트 기록은 그림이 한 장이라도 나왔을 때만 (전부 실패한 시트가 "가장 최근 시트"가 되지 않게)
+    const record: SheetRecord = {
+      id: sheetId,
+      time: new Date().toISOString(),
+      dir,
+      sheetFile,
+      model: r.model.key,
+      width: r.size.width,
+      height: r.size.height,
+      steps: r.steps,
+      seed,
+      basePrompt,
+      presets: r.presetNames,
+      variants: outVariants.map(({ n, label, prompt, file }) => ({ n, label, prompt, file })),
+    };
+    await ctx.sheets.add(record).catch(() => notes.push("비교 시트 기록을 저장하지 못했습니다."));
+  }
 
   return {
     status: "done",

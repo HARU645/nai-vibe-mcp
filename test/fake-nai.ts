@@ -105,7 +105,7 @@ export async function startFakeNai(initial: Partial<FakeState> = {}) {
       }
       const q = new URL(req.url ?? "", "http://x").searchParams;
       const want = (q.get("prompt") ?? "").toLowerCase();
-      const tags = state.tagDb.filter((t) => t.tag.toLowerCase().includes(want));
+      const tags = state.tagDb.filter((t: any) => String(t.tag ?? t.name ?? "").toLowerCase().includes(want));
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ tags }));
       return;

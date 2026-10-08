@@ -251,10 +251,18 @@ export class NaiClient {
         } catch (e) {
           throw new NaiApiError("bad_response", "태그 검색 결과를 읽지 못했습니다.", res.status, String(e));
         }
-        const list = (data as { tags?: unknown })?.tags;
-        if (!Array.isArray(list)) return [];
-        return list
-          .filter((t): t is Record<string, unknown> => !!t && typeof t === "object" && typeof (t as { tag?: unknown }).tag === "string")
+        // 형식이 바뀌었으면 "전부 없음"으로 보이지 않게 오류로 (그러면 진짜 있는 태그까지 빼 버린다)
+        const shapeError = (why: string) =>
+          new NaiApiError("bad_response", `태그 검색 응답 형식이 예상과 다릅니다 (${why}).`, res.status, raw.slice(0, 200));
+        if (!data || typeof data !== "object" || Array.isArray(data)) throw shapeError("객체가 아님");
+        const list = (data as { tags?: unknown }).tags;
+        if (list === undefined || list === null) return [];
+        if (!Array.isArray(list)) throw shapeError("tags가 배열이 아님");
+        const valid = list.filter(
+          (t): t is Record<string, unknown> => !!t && typeof t === "object" && typeof (t as { tag?: unknown }).tag === "string",
+        );
+        if (list.length > 0 && valid.length === 0) throw shapeError("tag 필드 없음");
+        return valid
           .map((t) => ({
             tag: String(t.tag),
             count: typeof t.count === "number" && Number.isFinite(t.count) ? t.count : 0,
