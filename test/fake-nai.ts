@@ -22,6 +22,8 @@ export interface FakeState {
   requests: Array<{ method: string; path: string; headers: http.IncomingHttpHeaders; body?: any }>;
   maxConcurrent: number;
   delayMs: number;
+  /** 다음 생성 응답 한 번을 이상하게: drop = 본문 중간에 연결 끊기, stall = 헤더만 보내고 멈춤 */
+  nextBody?: "drop" | "stall";
 }
 
 function tinyPng(): Buffer {
@@ -49,6 +51,7 @@ export async function startFakeNai(initial: Partial<FakeState> = {}) {
     ...initial,
   };
   let inFlight = 0;
+  const stalled: http.ServerResponse[] = [];
   const png = tinyPng();
 
   const server = http.createServer(async (req, res) => {
@@ -104,6 +107,15 @@ export async function startFakeNai(initial: Partial<FakeState> = {}) {
       }
       state.anlas -= cost;
       const zip = zipSync({ "image_0.png": png });
+      const mode = state.nextBody;
+      state.nextBody = undefined;
+      if (mode) {
+        res.writeHead(200, { "content-type": "application/x-zip-compressed", "content-length": String(zip.length) });
+        res.write(Buffer.from(zip.slice(0, 10)));
+        if (mode === "drop") setTimeout(() => res.destroy(), 20);
+        else stalled.push(res);
+        return;
+      }
       res.writeHead(200, { "content-type": "application/x-zip-compressed" });
       res.end(Buffer.from(zip));
       return;
@@ -118,7 +130,12 @@ export async function startFakeNai(initial: Partial<FakeState> = {}) {
   return {
     state,
     url: `http://127.0.0.1:${port}`,
-    close: () => new Promise<void>((r) => server.close(() => r())),
+    close: () =>
+      new Promise<void>((r) => {
+        for (const s of stalled) s.destroy();
+        server.closeAllConnections?.();
+        server.close(() => r());
+      }),
     generateBodies: () => state.requests.filter((r) => r.path === "/ai/generate-image").map((r) => r.body),
   };
 }

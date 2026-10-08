@@ -9,14 +9,22 @@
     "name": "haru645"
   },
   "license": "MIT",
-  "keywords": ["novelai", "image generation", "anime", "nai", "짤"],
+  "keywords": [
+    "novelai",
+    "image generation",
+    "anime",
+    "nai",
+    "짤"
+  ],
   "icon": "icon.png",
   "server": {
     "type": "node",
-    "entry_point": "server/index.js",
+    "entry_point": "server/index.mjs",
     "mcp_config": {
       "command": "node",
-      "args": ["${__dirname}/server/index.js"],
+      "args": [
+        "${__dirname}/server/index.mjs"
+      ],
       "env": {
         "NAI_TOKEN": "${user_config.nai_token}",
         "NAI_OUTPUT_DIR": "${user_config.output_dir}",
@@ -30,14 +38,32 @@
     }
   },
   "tools": [
-    { "name": "nai_generate", "description": "NovelAI로 그림 생성 (비용 들면 먼저 확인)" },
-    { "name": "nai_account", "description": "연결 확인, 구독·Anlas 잔액·V5 할당량" },
-    { "name": "nai_preset", "description": "화풍·캐릭터·크기 프리셋 저장/조회/삭제" },
-    { "name": "nai_about", "description": "버전·업데이트·진단 정보" }
+    {
+      "name": "nai_generate",
+      "description": "NovelAI로 그림 생성 (비용 들면 먼저 확인)"
+    },
+    {
+      "name": "nai_account",
+      "description": "연결 확인, 구독·Anlas 잔액·V5 할당량"
+    },
+    {
+      "name": "nai_preset",
+      "description": "화풍·캐릭터·크기 프리셋 저장/조회/삭제"
+    },
+    {
+      "name": "nai_about",
+      "description": "버전·업데이트·진단 정보"
+    }
   ],
   "compatibility": {
-    "platforms": ["win32", "darwin", "linux"],
-    "runtimes": { "node": ">=18.17.0" }
+    "platforms": [
+      "win32",
+      "darwin",
+      "linux"
+    ],
+    "runtimes": {
+      "node": ">=18.17.0"
+    }
   },
   "user_config": {
     "nai_token": {
@@ -50,8 +76,7 @@
     "output_dir": {
       "type": "directory",
       "title": "저장 폴더",
-      "description": "그림이 날짜별 하위 폴더로 저장되는 곳. 프리셋·기록도 이 아래 .nai-vibe 폴더에 저장돼.",
-      "default": "${HOME}/Pictures/nai-vibe",
+      "description": "그림이 날짜별 하위 폴더로 저장되는 곳. 비워 두면 '내 사진(Pictures)/nai-vibe'. 프리셋·기록도 이 아래 .nai-vibe 폴더에 저장돼.",
       "required": false
     },
     "default_model": {

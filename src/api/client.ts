@@ -57,10 +57,11 @@ const TOKEN_PATTERN = /pst-[A-Za-z0-9_\-]+/g;
 
 /** 토큰처럼 생긴 문자열과 Bearer 값을 지운다 */
 export function scrubSecrets(text: string, token?: string): string {
-  let out = text.replace(TOKEN_PATTERN, "pst-***");
-  out = out.replace(/Bearer\s+[A-Za-z0-9._\-]+/gi, "Bearer ***");
+  let out = text;
+  // 정확한 토큰부터 지워야 이상한 문자가 섞인 토큰도 꼬리가 안 남는다
   if (token && token.length >= 8) out = out.split(token).join("***");
-  return out;
+  out = out.replace(TOKEN_PATTERN, "pst-***");
+  return out.replace(/Bearer\s+[A-Za-z0-9._\-]+/gi, "Bearer ***");
 }
 
 const PNG_SIG = [0x89, 0x50, 0x4e, 0x47];
@@ -138,48 +139,59 @@ export class NaiClient {
     };
   }
 
-  private async send(path: string, init: { method: "GET" | "POST"; body?: unknown }, charged: boolean): Promise<Response> {
+  /**
+   * 요청을 보내고 read로 본문까지 읽는다. 타임아웃은 본문을 다 읽을 때까지 유지한다
+   * (헤더만 오고 멈추면 큐 전체가 막히니까).
+   */
+  private async send<T>(
+    path: string,
+    init: { method: "GET" | "POST"; body?: unknown },
+    charged: boolean,
+    read: (res: Response) => Promise<T>,
+  ): Promise<T> {
     const headers = this.headers();
     for (let attempt = 0; ; attempt++) {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
-      let res: Response;
-      try {
-        res = await this.fetchImpl(`${this.base}${path}`, {
-          method: init.method,
-          headers,
-          body: init.body === undefined ? undefined : JSON.stringify(init.body),
-          signal: ctrl.signal,
-        });
-      } catch (e) {
-        clearTimeout(timer);
-        const aborted = (e as { name?: string })?.name === "AbortError";
-        if (aborted) {
-          throw new NaiApiError(
-            "timeout",
-            `NovelAI가 ${Math.round(this.timeoutMs / 1000)}초 안에 답하지 않았어.`,
-            undefined,
-            undefined,
-            charged,
-          );
-        }
-        throw new NaiApiError(
+      const timeoutError = () =>
+        new NaiApiError("timeout", `NovelAI가 ${Math.round(this.timeoutMs / 1000)}초 안에 답하지 않았어.`, undefined, undefined, charged);
+      const networkError = (e: unknown) =>
+        new NaiApiError(
           "network",
-          "NovelAI에 연결하지 못했어. 인터넷 연결을 확인해 줘.",
+          "NovelAI와 연결이 끊겼어. 인터넷 연결을 확인해 줘.",
           undefined,
           scrubSecrets(String((e as Error)?.message ?? e), this.opts.token),
           // 연결이 중간에 끊긴 경우엔 서버가 이미 받았을 수도 있다
           charged,
         );
+      try {
+        let res: Response;
+        try {
+          res = await this.fetchImpl(`${this.base}${path}`, {
+            method: init.method,
+            headers,
+            body: init.body === undefined ? undefined : JSON.stringify(init.body),
+            signal: ctrl.signal,
+          });
+        } catch (e) {
+          throw ctrl.signal.aborted || (e as { name?: string })?.name === "AbortError" ? timeoutError() : networkError(e);
+        }
+        if (res.status === 429 && attempt < this.retryDelaysMs.length) {
+          await res.arrayBuffer().catch(() => undefined);
+          clearTimeout(timer);
+          await new Promise((r) => setTimeout(r, this.retryDelaysMs[attempt]));
+          continue;
+        }
+        if (!res.ok) throw await this.toError(res, charged);
+        try {
+          return await read(res);
+        } catch (e) {
+          if (e instanceof NaiApiError) throw e;
+          throw ctrl.signal.aborted ? timeoutError() : networkError(e);
+        }
+      } finally {
+        clearTimeout(timer);
       }
-      clearTimeout(timer);
-      if (res.status === 429 && attempt < this.retryDelaysMs.length) {
-        await res.arrayBuffer().catch(() => undefined);
-        await new Promise((r) => setTimeout(r, this.retryDelaysMs[attempt]));
-        continue;
-      }
-      if (!res.ok) throw await this.toError(res, charged);
-      return res;
     }
   }
 
@@ -205,21 +217,23 @@ export class NaiClient {
 
   getSubscription(): Promise<Subscription> {
     return this.enqueue(async () => {
-      const res = await this.send("/user/subscription", { method: "GET" }, false);
-      try {
-        return (await res.json()) as Subscription;
-      } catch (e) {
-        throw new NaiApiError("bad_response", "구독 정보를 읽지 못했어.", res.status, String(e));
-      }
+      return this.send("/user/subscription", { method: "GET" }, false, async (res) => {
+        const raw = await res.text();
+        try {
+          return JSON.parse(raw) as Subscription;
+        } catch (e) {
+          throw new NaiApiError("bad_response", "구독 정보를 읽지 못했어.", res.status, String(e));
+        }
+      });
     });
   }
 
   /** 그림 생성. 요청 하나 = 그림 한 장 (n_samples는 항상 1) */
   generate(body: Record<string, unknown>): Promise<Buffer[]> {
     return this.enqueue(async () => {
-      const res = await this.send("/ai/generate-image", { method: "POST", body }, true);
-      const buf = new Uint8Array(await res.arrayBuffer());
-      return extractImages(buf);
+      return this.send("/ai/generate-image", { method: "POST", body }, true, async (res) =>
+        extractImages(new Uint8Array(await res.arrayBuffer())),
+      );
     });
   }
 }

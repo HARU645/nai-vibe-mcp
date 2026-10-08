@@ -49,6 +49,34 @@ export function extractQuoted(prompt: string): string[] {
   return pieces;
 }
 
+/**
+ * 따옴표 안 글자(그림에 그릴 글씨)는 쉼표 정리·가중치 변환에서 빼고 원래대로 둔다.
+ * 따옴표 구간을 자리표시자로 바꿔 fn을 돌린 뒤 되돌린다.
+ */
+function protectQuotes(text: string, fn: (masked: string) => string): string {
+  const saved: string[] = [];
+  let masked = "";
+  const chars = Array.from(text);
+  let i = 0;
+  while (i < chars.length) {
+    const pair = TEXT_QUOTE_PAIRS.find(([open]) => open === chars[i]);
+    if (pair) {
+      let j = i + 1;
+      while (j < chars.length && chars[j] !== pair[1]) j++;
+      if (j < chars.length) {
+        saved.push(chars.slice(i, j + 1).join(""));
+        masked += `\u0000${saved.length - 1}\u0000`;
+        i = j + 1;
+        continue;
+      }
+    }
+    masked += chars[i];
+    i++;
+  }
+  if (saved.length === 0) return fn(text);
+  return fn(masked).replace(/\u0000(\d+)\u0000/g, (_m, n: string) => saved[Number(n)] ?? "");
+}
+
 function appendBeforeTextBlock(prompt: string, tags: string): string {
   const { head, text } = splitTextBlock(prompt);
   const trimmed = head.trimEnd().replace(/,+$/, "").trimEnd();
@@ -66,7 +94,7 @@ export interface ComposedPrompt {
 export function composePrompt(model: ModelInfo, prompt: string, quality: QualityPreset): ComposedPrompt {
   // 사용자가 직접 쓴 `Text:` 블록은 글씨라서 손대지 않고, 앞쪽 태그만 정리한다
   const split = splitTextBlock(prompt);
-  const head = tidyPrompt(convertWeightSyntax(split.head));
+  const head = protectQuotes(split.head, (masked) => tidyPrompt(convertWeightSyntax(masked)));
   let text = split.text ? (head ? `${head}\n${split.text}` : split.text) : head;
   const q = resolveQuality(model, quality);
   if (q.text) {

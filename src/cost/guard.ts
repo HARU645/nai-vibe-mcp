@@ -20,8 +20,8 @@ export interface GuardOptions {
 }
 
 export type GuardDecision =
-  | { action: "run" }
-  | { action: "confirm"; confirmId: string; message: string }
+  | { action: "run"; estimate: CostEstimate }
+  | { action: "confirm"; confirmId: string; message: string; estimate: CostEstimate }
   | { action: "blocked"; message: string };
 
 interface Pending {
@@ -47,6 +47,8 @@ function stableStringify(v: unknown): string {
 
 export class CostGuard {
   private spent = 0;
+  /** 무료로 예상한 생성에서 실제로 Anlas가 빠진 적이 있으면 켜진다. 그 뒤로는 무료 예상도 확인받는다 */
+  private freeMismatch = false;
   private readonly pending = new Map<string, Pending>();
   private readonly ttl: number;
   private readonly now: () => number;
@@ -69,9 +71,32 @@ export class CostGuard {
     return this.opts.allowMax;
   }
 
-  check(requestHash: string, est: CostEstimate, confirmId: string | undefined, anlas: number | null): GuardDecision {
+  check(
+    requestHash: string,
+    estIn: CostEstimate,
+    confirmId: string | undefined,
+    anlas: number | null,
+    summary?: string,
+  ): GuardDecision {
     this.prune();
-    if (est.total === 0) return { action: "run" };
+    const limit = this.opts.sessionLimit;
+    // 세션 상한은 무료 예상보다 먼저 본다 (무료 예상이 틀렸을 때도 멈추게)
+    if (limit > 0 && this.spent >= limit) {
+      return {
+        action: "blocked",
+        message: `이번 세션 Anlas 상한(${limit})에 닿았어 (지금까지 약 ${this.spent}). 더 쓰려면 확장 설정에서 세션 상한을 올리거나 앱을 다시 켜 줘.`,
+      };
+    }
+    let est = estIn;
+    if (est.total === 0 && this.freeMismatch) {
+      est = {
+        ...est,
+        free: false,
+        total: est.perImage * est.count,
+        reason: "무료로 예상했던 생성에서 실제로 Anlas가 빠진 적이 있어서, 이번 세션에선 무료 예상도 확인받을게",
+      };
+    }
+    if (est.total === 0) return { action: "run", estimate: est };
 
     if (anlas !== null && anlas < est.total) {
       return {
@@ -87,7 +112,6 @@ export class CostGuard {
       };
     }
 
-    const limit = this.opts.sessionLimit;
     if (limit > 0 && this.spent + est.total > limit) {
       return {
         action: "blocked",
@@ -99,25 +123,27 @@ export class CostGuard {
       const p = this.pending.get(confirmId);
       if (p && p.hash === requestHash && est.total <= p.total) {
         this.pending.delete(confirmId);
-        return { action: "run" };
+        return { action: "run", estimate: est };
       }
       // 번호가 틀렸거나, 요청이 바뀌었거나, 비용이 올랐으면 새로 확인받는다
     }
 
-    if (this.opts.mode === "allow" && est.total <= this.opts.allowMax) return { action: "run" };
+    if (this.opts.mode === "allow" && est.total <= this.opts.allowMax) return { action: "run", estimate: est };
 
     const id = randomBytes(6).toString("hex");
     this.pending.set(id, { hash: requestHash, total: est.total, expires: this.now() + this.ttl });
     return {
       action: "confirm",
       confirmId: id,
-      message: this.confirmMessage(est, anlas),
+      message: this.confirmMessage(est, anlas, summary),
+      estimate: est,
     };
   }
 
-  private confirmMessage(est: CostEstimate, anlas: number | null): string {
+  private confirmMessage(est: CostEstimate, anlas: number | null, summary?: string): string {
     const lines = [
       `💰 이 요청은 Anlas가 들어: 장당 약 ${est.perImage} × ${est.count}장 = 약 ${est.total} Anlas`,
+      ...(summary ? [`요청: ${summary}`] : []),
       `이유: ${est.reason}`,
     ];
     if (anlas !== null) lines.push(`지금 잔액: ${anlas} Anlas → 생성 후 약 ${anlas - est.total}`);
@@ -126,9 +152,15 @@ export class CostGuard {
     return lines.join("\n");
   }
 
-  /** 실제로 쓴 양(잔액 차이)을 기록한다. 잔액을 못 읽었으면 예상치를 넣는다 */
-  record(spent: number): void {
-    if (Number.isFinite(spent) && spent > 0) this.spent += spent;
+  /**
+   * 실제로 쓴 양(잔액 차이)을 기록한다. 잔액을 못 읽었으면 예상치를 넣는다.
+   * 무료로 예상(estimatedFree)했는데 실제로 빠졌으면 이후 무료 예상도 확인받게 한다.
+   */
+  record(spent: number, estimatedFree = false): void {
+    if (Number.isFinite(spent) && spent > 0) {
+      this.spent += spent;
+      if (estimatedFree) this.freeMismatch = true;
+    }
   }
 
   private prune(): void {

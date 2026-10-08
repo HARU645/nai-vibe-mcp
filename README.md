@@ -113,7 +113,7 @@ NovelAI는 비용 조회 API가 없어서, 웹 클라이언트와 같은 공식�
 
 ## 다른 앱에서 쓰기
 
-Claude 데스크톱 말고도 **로컬(stdio) MCP**를 지원하는 앱이면 다 돼. `.mcpb` 안의 `server/index.js`를 Node 18 이상으로 실행하면 되고, 설정은 환경변수로 줘.
+Claude 데스크톱 말고도 **로컬(stdio) MCP**를 지원하는 앱이면 다 돼. `.mcpb` 안의 `server/index.mjs`를 Node 18 이상으로 실행하면 되고, 설정은 환경변수로 줘.
 
 ```jsonc
 // Claude Code, Cursor 등 (mcpServers 형식)
@@ -121,15 +121,15 @@ Claude 데스크톱 말고도 **로컬(stdio) MCP**를 지원하는 앱이면 �
   "mcpServers": {
     "nai-vibe": {
       "command": "node",
-      "args": ["C:/tools/nai-vibe-mcp/server/index.js"],
+      "args": ["C:/tools/nai-vibe-mcp/server/index.mjs"],
       "env": { "NAI_TOKEN": "pst-...", "NAI_OUTPUT_DIR": "D:/nai-pictures" }
     }
   }
 }
 ```
 
-- **ChatGPT 데스크톱 (Codex 통합 앱)**: 설정 → MCP servers → Add server → STDIO, Command `node`, Arguments에 `server/index.js` 경로, 환경변수에 `NAI_TOKEN`.
-- **Codex CLI**: `codex mcp add nai-vibe --env NAI_TOKEN=pst-... -- node C:/tools/nai-vibe-mcp/server/index.js`
+- **ChatGPT 데스크톱 (Codex 통합 앱)**: 설정 → MCP servers → Add server → STDIO, Command `node`, Arguments에 `server/index.mjs` 경로, 환경변수에 `NAI_TOKEN`.
+- **Codex CLI**: `codex mcp add nai-vibe --env NAI_TOKEN=pst-... -- node C:/tools/nai-vibe-mcp/server/index.mjs`
 - ChatGPT 웹·Grok 웹/앱은 인터넷에 열린(https) 서버만 붙일 수 있어서 지금은 못 써.
 - npm 패키지·Windows 실행 파일(.exe)은 준비 중이야.
 

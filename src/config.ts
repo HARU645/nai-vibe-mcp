@@ -22,12 +22,16 @@ export interface Config {
   warnings: string[];
 }
 
-function env(name: string, e: NodeJS.ProcessEnv): string | undefined {
+function env(name: string, e: NodeJS.ProcessEnv, warnings?: string[]): string | undefined {
   const v = e[name];
   if (v === undefined) return undefined;
   const t = v.trim();
-  // .mcpb가 치환 못 한 자리표시자도 비어 있는 걸로 본다
-  if (t === "" || /^\$\{user_config\.[^}]+\}$/.test(t)) return undefined;
+  if (t === "") return undefined;
+  // .mcpb가 치환 못 한 자리표시자(${user_config.x}, ${HOME} 등)는 설정 안 한 걸로 본다
+  if (t.includes("${")) {
+    if (!/^\$\{user_config\.[^}]+\}$/.test(t)) warnings?.push(`${name} 값에 바뀌지 않은 \${…}가 있어서 무시했어`);
+    return undefined;
+  }
   return t;
 }
 
@@ -69,7 +73,7 @@ export function loadConfig(e: NodeJS.ProcessEnv = process.env): Config {
 
   return {
     token,
-    outputDir: path.resolve(expandHome(env("NAI_OUTPUT_DIR", e) ?? defaultOutputDir())),
+    outputDir: path.resolve(expandHome(env("NAI_OUTPUT_DIR", e, warnings) ?? defaultOutputDir())),
     defaultModel,
     costMode,
     allowMax: num("NAI_ALLOW_MAX", e, 30, 0, 10_000, warnings),

@@ -12,7 +12,23 @@ export async function writeFileAtomic(file: string, data: string | Uint8Array): 
   await fs.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmp, data);
-  await fs.rename(tmp, file);
+  // Windows에서 OneDrive·백신이 파일을 잡고 있으면 rename이 잠깐 실패할 수 있다 → 몇 번 다시
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await fs.rename(tmp, file);
+      return;
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (attempt < 5 && (code === "EPERM" || code === "EBUSY" || code === "EACCES")) {
+        await new Promise((r) => setTimeout(r, 100 * (attempt + 1)));
+        continue;
+      }
+      // 마지막 수단: 직접 덮어쓰고 임시 파일은 정리
+      await fs.writeFile(file, data);
+      await fs.rm(tmp, { force: true }).catch(() => undefined);
+      return;
+    }
+  }
 }
 
 export async function readJson<T>(file: string): Promise<T | undefined> {

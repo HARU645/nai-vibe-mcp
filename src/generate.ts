@@ -1,6 +1,7 @@
 // nai_generate의 본체: 프리셋 합치기 → 프롬프트 조립 → 비용 판단 → 한 장씩 생성 → 저장·기록.
 
 import { randomInt } from "node:crypto";
+import os from "node:os";
 import path from "node:path";
 import { NaiApiError, type NaiClient, anlasOf } from "./api/client.js";
 import {
@@ -21,6 +22,7 @@ import { joinTags } from "./prompt/syntax.js";
 import { parseSize, type Size } from "./sizes.js";
 import { localDateParts, writeNewFile } from "./store/files.js";
 import type { HistoryStore } from "./store/history.js";
+import type { SerialQueue } from "./serial.js";
 import type { Preset, PresetCharacter, PresetStore } from "./store/presets.js";
 
 export interface GenerateArgs {
@@ -68,6 +70,8 @@ export type GenerateOutcome =
 
 export interface GenerateContext {
   config: Config;
+  /** 생성은 한 번에 하나씩 (잔액 전후 비교·세션 상한이 정확하려면) */
+  serial: SerialQueue;
   client: NaiClient;
   guard: CostGuard;
   presets: PresetStore;
@@ -88,6 +92,21 @@ function pickLast<T>(presets: Preset[], get: (p: Preset) => T | undefined): T | 
     if (v !== undefined && v !== null && v !== "") return v;
   }
   return undefined;
+}
+
+/** 저장 폴더에 못 쓰면(권한·디스크) 임시 폴더에라도 저장한다. 돈 내고 받은 그림을 버리지 않으려고 */
+async function saveImage(dirs: string[], base: string, png: Buffer, notes: string[]): Promise<string> {
+  let lastError: unknown;
+  for (const [i, dir] of dirs.entries()) {
+    try {
+      const file = await writeNewFile(dir, base, ".png", png);
+      if (i > 0) notes.push(`저장 폴더에 쓰지 못해서 임시 폴더에 저장했어: ${file} (저장 폴더 설정을 확인해 줘)`);
+      return file;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError;
 }
 
 export async function runGenerate(args: GenerateArgs, ctx: GenerateContext): Promise<GenerateOutcome> {
@@ -175,90 +194,128 @@ export async function runGenerate(args: GenerateArgs, ctx: GenerateContext): Pro
     if (e instanceof NaiApiError && (e.kind === "unauthorized" || e.kind === "no_token")) throw e;
     notes.push("계정 정보를 못 읽어서 비용을 유료 기준으로 계산했어.");
   }
-  const estimate = estimateCost(model, size.width, size.height, steps, count, account);
+  const rawEstimate = estimateCost(model, size.width, size.height, steps, count, account);
 
-  const { confirm_id: confirmId, ...hashable } = args;
-  const decision = guard.check(hashRequest(hashable), estimate, confirmId, anlasBefore);
-  if (decision.action === "blocked") return { status: "blocked", message: decision.message, estimate };
+  // 확인 번호는 "실제로 보낼 요청"에 묶는다 (프리셋이 중간에 바뀌거나 기본값을 명시해도 정확하게)
+  const resolvedRequest = {
+    model: model.id,
+    width: size.width,
+    height: size.height,
+    steps,
+    scale,
+    sampler,
+    count,
+    seed: args.seed ?? null,
+    prompt: composed.text,
+    negative: negative.text,
+    characters,
+    qt: composed.tagHintQt,
+    uc: negative.tagHintUc,
+    varietyPlus: !!args.variety_plus,
+  };
+  const summary = `${model.label}, ${size.width}x${size.height}, ${steps}스텝, ${count}장`;
+  const decision = guard.check(hashRequest(resolvedRequest), rawEstimate, args.confirm_id, anlasBefore, summary);
+  if (decision.action === "blocked") return { status: "blocked", message: decision.message, estimate: rawEstimate };
   if (decision.action === "confirm") {
-    return { status: "needs_confirmation", confirmId: decision.confirmId, message: decision.message, estimate, model };
+    return {
+      status: "needs_confirmation",
+      confirmId: decision.confirmId,
+      message: decision.message,
+      estimate: decision.estimate,
+      model,
+    };
   }
+  const estimate = decision.estimate;
 
-  // 4. 한 장씩 생성
+  // 4. 한 장씩 생성. 무슨 일이 있어도 아래 5번(잔액 확인·기록)까지는 간다
   const images: GeneratedImage[] = [];
   let failure: NaiApiError | undefined;
   const baseSeed = args.seed;
   const { date } = localDateParts();
-  const dayDir = path.join(config.outputDir, date);
+  const saveDirs = [path.join(config.outputDir, date), path.join(os.tmpdir(), "nai-vibe-fallback", date)];
 
-  for (let i = 0; i < count; i++) {
-    const seed = baseSeed !== undefined ? (baseSeed + i) % 4_294_967_296 : randomInt(0, 4_294_967_295);
-    const body = buildGenerateBody({
-      model,
-      prompt: composed.text,
-      negative: negative.text,
-      width: size.width,
-      height: size.height,
-      steps,
-      scale,
-      sampler,
-      noiseSchedule: NOISE,
-      cfgRescale: 0,
-      seed,
-      varietyPlus: !!args.variety_plus,
-      characters,
-      tagHintQt: composed.tagHintQt,
-      tagHintUc: negative.tagHintUc,
-    });
-    let pngs: Buffer[];
-    try {
-      pngs = await client.generate(body);
-    } catch (e) {
-      if (e instanceof NaiApiError) {
-        failure = e;
-        break;
-      }
-      throw e;
-    }
-    const png = pngs[0]!;
-    const { time } = localDateParts();
-    const file = await writeNewFile(dayDir, `nai_${time}_${seed}`, ".png", png);
-    let preview: Preview | undefined;
-    try {
-      preview = makePreview(png);
-    } catch {
-      notes.push(`${path.basename(file)} 미리보기를 못 만들었어 (원본은 저장됨).`);
-    }
-    images.push({ path: file, seed, width: size.width, height: size.height, preview });
-    await ctx.history
-      .addImage({
-        id: `${date}-${time}-${seed}`,
-        time: new Date().toISOString(),
-        file,
-        model: model.key,
-        prompt: userPrompt,
-        negative: userNegative,
-        finalPrompt: composed.text,
-        finalNegative: negative.text,
-        presets: presetNames,
+  try {
+    for (let i = 0; i < count; i++) {
+      const seed = baseSeed !== undefined ? (baseSeed + i) % 4_294_967_296 : randomInt(0, 4_294_967_295);
+      const body = buildGenerateBody({
+        model,
+        prompt: composed.text,
+        negative: negative.text,
         width: size.width,
         height: size.height,
         steps,
         scale,
         sampler,
+        noiseSchedule: NOISE,
+        cfgRescale: 0,
         seed,
-        quality: composed.qualityApplied,
-        ucPreset: negative.ucApplied,
         varietyPlus: !!args.variety_plus,
         characters,
-        estimatedAnlas: estimate.free ? 0 : estimate.perImage,
-      })
-      .catch(() => notes.push("생성 기록을 저장하지 못했어."));
+        tagHintQt: composed.tagHintQt,
+        tagHintUc: negative.tagHintUc,
+      });
+      let pngs: Buffer[];
+      try {
+        pngs = await client.generate(body);
+      } catch (e) {
+        if (e instanceof NaiApiError) {
+          failure = e;
+          break;
+        }
+        throw e;
+      }
+      const png = pngs[0]!;
+      const { time } = localDateParts();
+      const file = await saveImage(saveDirs, `nai_${time}_${seed}`, png, notes);
+      let preview: Preview | undefined;
+      try {
+        preview = makePreview(png);
+      } catch {
+        notes.push(`${path.basename(file)} 미리보기를 못 만들었어 (원본은 저장됨).`);
+      }
+      images.push({ path: file, seed, width: size.width, height: size.height, preview });
+      await ctx.history
+        .addImage({
+          id: `${date}-${time}-${seed}`,
+          time: new Date().toISOString(),
+          file,
+          model: model.key,
+          prompt: userPrompt,
+          negative: userNegative,
+          finalPrompt: composed.text,
+          finalNegative: negative.text,
+          presets: presetNames,
+          width: size.width,
+          height: size.height,
+          steps,
+          scale,
+          sampler,
+          seed,
+          quality: composed.qualityApplied,
+          ucPreset: negative.ucApplied,
+          varietyPlus: !!args.variety_plus,
+          characters,
+          estimatedAnlas: estimate.free ? 0 : estimate.perImage,
+        })
+        .catch(() => notes.push("생성 기록을 저장하지 못했어."));
+    }
+  } catch (e) {
+    // 그림을 받은 뒤 저장 등에서 터진 경우: 과금됐을 수 있다
+    failure =
+      e instanceof NaiApiError
+        ? e
+        : new NaiApiError(
+            "bad_response",
+            `그림을 받은 뒤 처리하다 오류가 났어: ${(e as Error)?.message ?? String(e)}`,
+            undefined,
+            undefined,
+            true,
+          );
   }
 
   // 5. 실제로 쓴 Anlas 확인
   let anlasAfter: number | null = null;
-  if (images.length > 0 || failure?.maybeCharged) {
+  if (images.length > 0 || failure?.maybeCharged || estimate.total > 0) {
     try {
       anlasAfter = anlasOf(await client.getSubscription());
     } catch {
@@ -267,7 +324,13 @@ export async function runGenerate(args: GenerateArgs, ctx: GenerateContext): Pro
   }
   const spent = anlasBefore !== null && anlasAfter !== null ? anlasBefore - anlasAfter : null;
   const expected = estimate.free ? 0 : estimate.perImage * images.length;
-  guard.record(spent ?? expected);
+  if (spent !== null) {
+    // 잔액 차이를 알면 그게 진짜. 무료 예상(expected 0)인데 빠졌으면 가드가 이후 무료 예상도 확인받게 바뀐다
+    guard.record(spent, estimate.free);
+  } else {
+    // 잔액을 못 읽었으면 예상치로. 실패한 요청도 과금됐을 수 있으면 한 장 더 친다
+    guard.record(estimate.free ? 0 : estimate.perImage * (images.length + (failure?.maybeCharged ? 1 : 0)));
+  }
   await ctx.history
     .addLedger({
       time: new Date().toISOString(),
@@ -286,7 +349,9 @@ export async function runGenerate(args: GenerateArgs, ctx: GenerateContext): Pro
     })
     .catch(() => undefined);
 
-  if (spent !== null && spent !== expected) {
+  if (failure?.maybeCharged && spent !== null && spent > expected) {
+    notes.push(`실패한 요청에서도 Anlas가 빠졌어 (이번에 총 ${spent} 차감).`);
+  } else if (!failure && spent !== null && spent !== expected) {
     notes.push(`예상(${expected})과 실제 차감(${spent})이 달라. 기록해 뒀어 — 비용 공식 보정에 써.`);
   }
 

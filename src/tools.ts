@@ -99,7 +99,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
     async (args) => {
       ctx.updates.poke();
       try {
-        const r = await runGenerate(args, ctx);
+        const r = await ctx.serial.run(() => runGenerate(args, ctx));
         if (r.status === "blocked") {
           return {
             content: [text(withNotice([`⛔ 생성 안 함. ${r.message}`], ctx))],
@@ -120,6 +120,19 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
           };
         }
         const lines: string[] = [];
+        if (r.images.length === 0 && r.error) {
+          lines.push(`❌ 생성 실패: ${r.error.message}${r.error.detail ? `\n서버 메시지: ${r.error.detail}` : ""}`);
+          if (r.error.maybeCharged) {
+            lines.push("⚠️ 요청이 NovelAI에 닿았을 수 있어서 Anlas가 빠졌을 수도 있어.");
+          }
+          if (r.spent !== null) lines.push(`잔액 확인: ${r.spent} 차감 → 남은 ${r.anlasAfter}`);
+          lines.push(...r.notes);
+          return {
+            isError: true,
+            content: [text(withNotice(lines, ctx))],
+            structuredContent: { status: "failed", error: r.error.kind, anlas_spent: r.spent, anlas_left: r.anlasAfter },
+          };
+        }
         lines.push(`✅ ${r.images.length}장 생성 (${r.model.label})`);
         r.images.forEach((im, i) => lines.push(`${i + 1}. ${im.path}  (seed ${im.seed}, ${im.width}x${im.height})`));
         if (r.spent !== null) lines.push(`Anlas: ${r.spent} 사용 → 남은 ${r.anlasAfter}`);

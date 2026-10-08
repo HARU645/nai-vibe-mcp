@@ -25,7 +25,8 @@ if (pkg.repository?.url) {
   manifest.repository = { type: "git", url: pkg.repository.url };
 }
 writeFileSync(path.join(stage, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-cpSync(path.join(root, "dist", "index.js"), path.join(stage, "server", "index.js"));
+// .mjs로 둬야 Node가 버전과 상관없이 ESM으로 읽는다 (package.json이 번들 안에 없으니까)
+cpSync(path.join(root, "dist", "index.js"), path.join(stage, "server", "index.mjs"));
 for (const f of ["icon.png", "README.md", "LICENSE"]) cpSync(path.join(root, f), path.join(stage, f));
 
 // Windows에서도 되게 .bin 래퍼 대신 CLI 파일을 node로 직접 실행

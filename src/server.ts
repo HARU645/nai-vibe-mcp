@@ -4,6 +4,7 @@ import type { Config } from "./config.js";
 import { CostGuard } from "./cost/guard.js";
 import { HistoryStore } from "./store/history.js";
 import { PresetStore } from "./store/presets.js";
+import { SerialQueue } from "./serial.js";
 import { registerTools, type ToolContext } from "./tools.js";
 import { UpdateChecker } from "./update.js";
 import { VERSION } from "./version.js";
@@ -29,6 +30,7 @@ export function createServer(config: Config, deps: ServerDeps = {}): { server: M
   );
   const ctx: ToolContext = {
     config,
+    serial: new SerialQueue(),
     client: new NaiClient({
       token: config.token,
       base: config.apiBase,

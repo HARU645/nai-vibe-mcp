@@ -327,3 +327,117 @@ describe("캐릭터", () => {
     expect(textOf(r)).toContain("V5 무료 할당량이 비어");
   });
 });
+
+describe("리뷰에서 나온 경우들", () => {
+  it("무료로 예상했는데 돈이 빠지면, 다음부터 무료 예상도 확인받는다", async () => {
+    fake.state.tier = 3;
+    fake.state.active = true; // Opus라서 무료로 예상하지만 서버는 돈을 뺌
+    const { client } = await connect();
+    const r1: any = await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } });
+    expect(r1.structuredContent.status).toBe("done");
+    expect(r1.structuredContent.anlas_spent).toBe(26);
+    const r2: any = await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } });
+    expect(r2.structuredContent.status).toBe("needs_confirmation");
+    expect(r2.structuredContent.estimated_anlas).toBe(26);
+    expect(fake.generateBodies().length).toBe(1);
+  });
+
+  it("세션 상한에 닿으면 무료 예상도 막는다", async () => {
+    fake.state.tier = 3;
+    fake.state.active = true;
+    const { client } = await connect({ NAI_SESSION_LIMIT: "20" });
+    await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } }); // 26 빠짐
+    const r: any = await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } });
+    expect(r.structuredContent.status).toBe("blocked");
+    expect(fake.generateBodies().length).toBe(1);
+  });
+
+  it("본문 받다가 끊기면: 과금 가능성 알림 + 사용량 기록", async () => {
+    fake.state.nextBody = "drop";
+    const { client, ctx } = await connect({ NAI_COST_MODE: "allow", NAI_ALLOW_MAX: "100" });
+    const r: any = await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } });
+    expect(r.isError).toBe(true);
+    expect(textOf(r)).toContain("빠졌을 수도");
+    expect(ctx.guard.sessionSpent).toBe(26);
+    const ledger = await fs.readFile(path.join(outDir, ".nai-vibe", "ledger.jsonl"), "utf8");
+    expect(JSON.parse(ledger.trim())).toMatchObject({ generated: 0, actual: 26 });
+  });
+
+  it("헤더만 오고 멈추면 타임아웃으로 끝나고 다음 요청이 막히지 않는다", async () => {
+    fake.state.nextBody = "stall";
+    const { client } = await connect({ NAI_COST_MODE: "allow", NAI_ALLOW_MAX: "100", NAI_TIMEOUT_MS: "10000" });
+    const t0 = Date.now();
+    const r: any = await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } });
+    expect(Date.now() - t0).toBeLessThan(15_000);
+    expect(r.isError).toBe(true);
+    expect(textOf(r)).toContain("답하지 않았어");
+    const r2: any = await client.callTool({ name: "nai_account", arguments: {} });
+    expect(r2.isError).toBeFalsy();
+  }, 30_000);
+
+  it("저장 폴더에 못 쓰면 임시 폴더에라도 저장한다", async () => {
+    const blocker = path.join(outDir, "not-a-dir");
+    await fs.writeFile(blocker, "x"); // 파일이라 그 아래에 폴더를 못 만든다
+    const { client } = await connect({ NAI_OUTPUT_DIR: blocker, NAI_COST_MODE: "allow", NAI_ALLOW_MAX: "100" });
+    const r: any = await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } });
+    expect(r.structuredContent.status).toBe("done");
+    const file = r.structuredContent.images[0].path as string;
+    expect(file).toContain("nai-vibe-fallback");
+    expect(textOf(r)).toContain("임시 폴더");
+    await fs.rm(file, { force: true });
+  });
+
+  it("동시에 여러 번 불러도 하나씩 돌고 세션 상한을 지킨다", async () => {
+    const { client, ctx } = await connect({ NAI_COST_MODE: "allow", NAI_ALLOW_MAX: "100", NAI_SESSION_LIMIT: "60" });
+    const rs: any[] = await Promise.all(
+      [0, 1, 2, 3, 4].map(() => client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } })),
+    );
+    expect(rs.filter((r) => r.structuredContent?.status === "done").length).toBe(2);
+    expect(fake.generateBodies().length).toBe(2);
+    expect(ctx.guard.sessionSpent).toBe(52);
+    expect(fake.state.maxConcurrent).toBe(1);
+  });
+
+  it("확인 뒤 프리셋이 바뀌면 그 번호로는 실행 안 한다", async () => {
+    const { client } = await connect();
+    await client.callTool({ name: "nai_preset", arguments: { action: "save", name: "s", prompt: "artist:a" } });
+    const r1: any = await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl", presets: ["s"] } });
+    await client.callTool({ name: "nai_preset", arguments: { action: "save", name: "s", prompt: "artist:b", size: "large_portrait" } });
+    const r2: any = await client.callTool({
+      name: "nai_generate",
+      arguments: { prompt: "1girl", presets: ["s"], confirm_id: r1.structuredContent.confirm_id },
+    });
+    expect(r2.structuredContent.status).toBe("needs_confirmation");
+    expect(fake.generateBodies().length).toBe(0);
+  });
+
+  it("기본값을 명시해서 다시 불러도 같은 요청으로 본다", async () => {
+    const { client } = await connect();
+    const r1: any = await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } });
+    expect(textOf(r1)).toContain("832x1216");
+    const r2: any = await client.callTool({
+      name: "nai_generate",
+      arguments: { prompt: "1girl", size: "portrait", count: 1, steps: 23, model: "v4.5-full", confirm_id: r1.structuredContent.confirm_id },
+    });
+    expect(r2.structuredContent.status).toBe("done");
+  });
+
+  it("__proto__ 같은 이름은 프리셋으로 못 쓴다", async () => {
+    const { client } = await connect();
+    const r: any = await client.callTool({ name: "nai_preset", arguments: { action: "save", name: "__proto__", prompt: "x" } });
+    expect(r.isError).toBe(true);
+  });
+
+  it("손으로 고친 이상한 프리셋 값은 생성 전에 걸러낸다", async () => {
+    await fs.mkdir(path.join(outDir, ".nai-vibe"), { recursive: true });
+    await fs.writeFile(
+      path.join(outDir, ".nai-vibe", "presets.json"),
+      JSON.stringify({ schema: 1, presets: { bad: { kind: "other", steps: "28", created: "x", updated: "x" } } }),
+    );
+    const { client } = await connect();
+    const r: any = await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl", presets: ["bad"] } });
+    expect(r.isError).toBe(true);
+    expect(textOf(r)).toContain("steps");
+    expect(fake.state.requests.length).toBe(0);
+  });
+});

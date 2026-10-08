@@ -288,3 +288,19 @@ describe("설정", () => {
     expect(c.warnings.length).toBe(3);
   });
 });
+
+describe("리뷰 반영", () => {
+  it("이상한 문자가 섞인 토큰도 꼬리가 안 남는다", () => {
+    const t = "pst-abc\ndef123456";
+    expect(scrubSecrets(`Bearer ${t}`, t)).not.toContain("def123456");
+  });
+  it("따옴표 안 글자는 정리·변환하지 않는다", () => {
+    const r = composePrompt(m("v5-full"), 'sign, "Hello ,  world", "(sale:50)"', "off");
+    expect(r.text).toBe('sign, "Hello ,  world", "(sale:50)"\nText: Hello ,  world\n\n(sale:50)');
+  });
+  it("치환 안 된 ${HOME}은 무시하고 경고", () => {
+    const c = loadConfig({ NAI_OUTPUT_DIR: "${HOME}/Pictures/nai-vibe" });
+    expect(c.outputDir).not.toContain("${");
+    expect(c.warnings.length).toBe(1);
+  });
+});
