@@ -53,7 +53,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           V: ${{ steps.v.outputs.version }}
         run: |
-          pre=""
-          case "$V" in 0.*) pre="--prerelease" ;; esac
+          # 프리릴리스로 표시하면 GitHub "최신 릴리스" API에서 빠져서 앱의 새 버전 알림이 못 찾는다
+          # → 0.x는 제목에만 "베타"를 붙인다
+          title="v$V"
+          case "$V" in 0.*) title="v$V (베타)" ;; esac
           gh release create "v$V" "build/nai-vibe-mcp-$V.mcpb" \
-            --target "$GITHUB_SHA" --title "v$V" --notes-file notes.md $pre
+            --target "$GITHUB_SHA" --title "$title" --notes-file notes.md --latest
