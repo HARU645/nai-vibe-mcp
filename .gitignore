@@ -5,3 +5,5 @@ build/
 *.mcpb
 .env
 test-output/
+# 개인 작업 계획 (Claude 프로젝트 문서로 관리)
+docs/plan.md

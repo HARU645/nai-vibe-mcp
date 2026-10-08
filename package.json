@@ -1,9 +1,24 @@
 {
   "name": "nai-vibe-mcp",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "말로 NovelAI 짤뽑 — NovelAI 이미지 생성을 Claude 등 MCP 앱에서 쓰게 해 주는 비공식 MCP 서버",
   "license": "MIT",
   "author": "haru645",
+  "homepage": "https://github.com/haru645/nai-vibe-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/haru645/nai-vibe-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/haru645/nai-vibe-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "novelai",
+    "claude",
+    "mcpb",
+    "image-generation"
+  ],
   "type": "module",
   "bin": {
     "nai-vibe-mcp": "dist/index.js"

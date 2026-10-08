@@ -6,7 +6,8 @@
   "description": "말로 NovelAI 그림 뽑기 — 비용 확인, 프리셋, 날짜별 저장 (비공식)",
   "long_description": "NovelAI 이미지 생성을 Claude에서 대화로 쓰게 해 주는 비공식 MCP 서버야. 한국어로 장면을 말하면 Claude가 태그로 바꿔서 그림을 뽑고, 그림은 내 PC 폴더에 날짜별로 저장돼. Anlas가 드는 요청은 미리 예상 비용을 보여 주고 확인을 받은 뒤에만 실행해. 자주 쓰는 화풍·캐릭터는 프리셋으로 저장해 둘 수 있어.\n\n필요한 것: NovelAI 계정과 Persistent API Token (NovelAI → User Settings → Account → Get Persistent API Token). 토큰은 이 설정 창에만 넣고 채팅에는 붙여넣지 마.\n\nNovelAI/Anlatan과 관계없는 개인 프로젝트야.",
   "author": {
-    "name": "haru645"
+    "name": "haru645",
+    "url": "https://github.com/haru645"
   },
   "license": "MIT",
   "keywords": [
@@ -135,5 +136,7 @@
       "default": true,
       "required": false
     }
-  }
+  },
+  "homepage": "https://github.com/haru645/nai-vibe-mcp",
+  "support": "https://github.com/haru645/nai-vibe-mcp/issues"
 }
