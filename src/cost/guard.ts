@@ -84,7 +84,7 @@ export class CostGuard {
     if (limit > 0 && this.spent >= limit) {
       return {
         action: "blocked",
-        message: `이번 세션 Anlas 상한(${limit})에 닿았어 (지금까지 약 ${this.spent}). 더 쓰려면 확장 설정에서 세션 상한을 올리거나 앱을 다시 켜 줘.`,
+        message: `이번 세션 Anlas 상한(${limit})에 도달했습니다 (지금까지 약 ${this.spent} 사용). 더 사용하려면 확장 프로그램 설정에서 세션 상한을 올리거나 앱을 다시 시작해 주세요.`,
       };
     }
     let est = estIn;
@@ -93,7 +93,7 @@ export class CostGuard {
         ...est,
         free: false,
         total: est.perImage * est.count,
-        reason: "무료로 예상했던 생성에서 실제로 Anlas가 빠진 적이 있어서, 이번 세션에선 무료 예상도 확인받을게",
+        reason: "무료로 예상한 생성에서 실제로 Anlas가 차감된 적이 있어, 이번 세션에서는 무료 예상도 확인을 받음",
       };
     }
     if (est.total === 0) return { action: "run", estimate: est };
@@ -101,21 +101,21 @@ export class CostGuard {
     if (anlas !== null && anlas < est.total) {
       return {
         action: "blocked",
-        message: `Anlas가 모자라. 예상 ${est.total} Anlas가 필요한데 지금 ${anlas} Anlas 있어.`,
+        message: `Anlas가 부족합니다. 예상 ${est.total} Anlas가 필요하지만 현재 잔액은 ${anlas} Anlas입니다.`,
       };
     }
 
     if (this.opts.mode === "free_only") {
       return {
         action: "blocked",
-        message: `비용 모드가 free_only라서 유료 생성은 막아 뒀어 (예상 ${est.total} Anlas — ${est.reason}). 크기·스텝을 줄이거나 확장 설정에서 비용 모드를 바꿔 줘.`,
+        message: `비용 모드가 free_only여서 유료 생성은 실행하지 않습니다 (예상 ${est.total} Anlas — ${est.reason}). 크기·스텝을 줄이거나 확장 프로그램 설정에서 비용 모드를 바꿔 주세요.`,
       };
     }
 
     if (limit > 0 && this.spent + est.total > limit) {
       return {
         action: "blocked",
-        message: `이번 세션 Anlas 상한(${limit})을 넘어. 지금까지 약 ${this.spent} 썼고 이번 요청은 ${est.total}이야. 더 쓰려면 확장 설정에서 세션 상한을 올리거나 앱을 다시 켜 줘.`,
+        message: `이번 세션 Anlas 상한(${limit})을 넘게 됩니다 (지금까지 약 ${this.spent} 사용, 이번 요청 약 ${est.total}). 더 사용하려면 확장 프로그램 설정에서 세션 상한을 올리거나 앱을 다시 시작해 주세요.`,
       };
     }
 
@@ -142,13 +142,13 @@ export class CostGuard {
 
   private confirmMessage(est: CostEstimate, anlas: number | null, summary?: string): string {
     const lines = [
-      `💰 이 요청은 Anlas가 들어: 장당 약 ${est.perImage} × ${est.count}장 = 약 ${est.total} Anlas`,
+      `💰 이 요청에는 Anlas가 듭니다: 장당 약 ${est.perImage} × ${est.count}장 = 약 ${est.total} Anlas`,
       ...(summary ? [`요청: ${summary}`] : []),
       `이유: ${est.reason}`,
     ];
-    if (anlas !== null) lines.push(`지금 잔액: ${anlas} Anlas → 생성 후 약 ${anlas - est.total}`);
+    if (anlas !== null) lines.push(`현재 잔액: ${anlas} Anlas → 생성 후 약 ${anlas - est.total}`);
     if (this.opts.sessionLimit > 0) lines.push(`이번 세션에 쓴 양: 약 ${this.spent} / 상한 ${this.opts.sessionLimit}`);
-    lines.push("아직 아무것도 생성하지 않았어. 사용자에게 진행할지 물어보고, 동의하면 같은 인자에 confirm_id를 넣어 다시 호출해.");
+    lines.push("아직 아무것도 생성하지 않았습니다. 사용자에게 진행 여부를 확인하고, 동의를 받으면 같은 인자에 confirm_id를 넣어 다시 호출하세요.");
     return lines.join("\n");
   }
 

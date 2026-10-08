@@ -77,19 +77,19 @@ export function extractImages(body: Uint8Array): Buffer[] {
     try {
       files = unzipSync(body);
     } catch (e) {
-      throw new NaiApiError("bad_response", "NovelAI 응답 zip을 풀지 못했어.", undefined, String(e), true);
+      throw new NaiApiError("bad_response", "NovelAI 응답 zip을 풀지 못했습니다.", undefined, String(e), true);
     }
     const names = Object.keys(files)
       .filter((n) => /\.(png|webp)$/i.test(n))
       .sort((a, b) => indexOf(a) - indexOf(b) || a.localeCompare(b));
     const images = names.map((n) => Buffer.from(files[n]!));
     if (images.length === 0) {
-      throw new NaiApiError("bad_response", "NovelAI 응답 zip 안에 그림이 없어.", undefined, Object.keys(files).join(", "), true);
+      throw new NaiApiError("bad_response", "NovelAI 응답 zip 안에 그림이 없습니다.", undefined, Object.keys(files).join(", "), true);
     }
     return images;
   }
   if (isPng(body)) return [Buffer.from(body)];
-  throw new NaiApiError("bad_response", "NovelAI 응답이 zip도 PNG도 아니야.", undefined, undefined, true);
+  throw new NaiApiError("bad_response", "NovelAI 응답이 zip도 PNG도 아닙니다.", undefined, undefined, true);
 }
 
 function indexOf(name: string): number {
@@ -128,7 +128,7 @@ export class NaiClient {
     if (!this.opts.token) {
       throw new NaiApiError(
         "no_token",
-        "NovelAI 토큰이 설정돼 있지 않아. NovelAI 계정 설정 → Account → Get Persistent API Token으로 만든 pst-로 시작하는 토큰을 확장 설정에 넣어 줘.",
+        "NovelAI 토큰이 설정되어 있지 않습니다. NovelAI 계정 설정 → Account → Get Persistent API Token에서 발급한 pst-로 시작하는 토큰을 확장 프로그램 설정에 입력해 주세요.",
       );
     }
     return {
@@ -154,11 +154,11 @@ export class NaiClient {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
       const timeoutError = () =>
-        new NaiApiError("timeout", `NovelAI가 ${Math.round(this.timeoutMs / 1000)}초 안에 답하지 않았어.`, undefined, undefined, charged);
+        new NaiApiError("timeout", `NovelAI가 ${Math.round(this.timeoutMs / 1000)}초 안에 응답하지 않았습니다.`, undefined, undefined, charged);
       const networkError = (e: unknown) =>
         new NaiApiError(
           "network",
-          "NovelAI와 연결이 끊겼어. 인터넷 연결을 확인해 줘.",
+          "NovelAI와 연결이 끊겼습니다. 인터넷 연결을 확인해 주세요.",
           undefined,
           scrubSecrets(String((e as Error)?.message ?? e), this.opts.token),
           // 연결이 중간에 끊긴 경우엔 서버가 이미 받았을 수도 있다
@@ -203,16 +203,16 @@ export class NaiClient {
       /* ignore */
     }
     const s = res.status;
-    if (s === 400) return new NaiApiError("bad_request", "NovelAI가 요청을 거절했어 (400). 설정값을 확인해 줘.", s, detail);
-    if (s === 401) return new NaiApiError("unauthorized", "토큰이 맞지 않아 (401). 토큰을 다시 확인해 줘.", s, detail);
+    if (s === 400) return new NaiApiError("bad_request", "NovelAI가 요청을 거절했습니다 (400). 설정값을 확인해 주세요.", s, detail);
+    if (s === 401) return new NaiApiError("unauthorized", "토큰이 올바르지 않습니다 (401). 토큰을 다시 확인해 주세요.", s, detail);
     if (s === 402)
-      return new NaiApiError("payment_required", "Anlas가 부족하거나 이 기능에 구독이 필요해 (402).", s, detail);
-    if (s === 409) return new NaiApiError("conflict", "NovelAI가 요청 충돌을 알렸어 (409).", s, detail);
+      return new NaiApiError("payment_required", "Anlas가 부족하거나 이 기능에 구독이 필요합니다 (402).", s, detail);
+    if (s === 409) return new NaiApiError("conflict", "NovelAI가 요청 충돌을 알렸습니다 (409).", s, detail);
     if (s === 429)
-      return new NaiApiError("rate_limited", "NovelAI가 잠깐 쉬라고 해 (429). 조금 뒤에 다시 해 줘.", s, detail);
+      return new NaiApiError("rate_limited", "NovelAI 요청이 너무 잦습니다 (429). 잠시 후 다시 시도해 주세요.", s, detail);
     if (s >= 500)
-      return new NaiApiError("server_error", `NovelAI 서버 오류야 (${s}).`, s, detail, charged);
-    return new NaiApiError("bad_request", `NovelAI가 예상 못 한 답을 줬어 (${s}).`, s, detail);
+      return new NaiApiError("server_error", `NovelAI 서버 오류입니다 (${s}).`, s, detail, charged);
+    return new NaiApiError("bad_request", `NovelAI에서 예상하지 못한 응답이 왔습니다 (${s}).`, s, detail);
   }
 
   getSubscription(): Promise<Subscription> {
@@ -222,7 +222,7 @@ export class NaiClient {
         try {
           return JSON.parse(raw) as Subscription;
         } catch (e) {
-          throw new NaiApiError("bad_response", "구독 정보를 읽지 못했어.", res.status, String(e));
+          throw new NaiApiError("bad_response", "구독 정보를 읽지 못했습니다.", res.status, String(e));
         }
       });
     });

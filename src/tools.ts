@@ -42,8 +42,8 @@ function errorResult(e: unknown, ctx: ToolContext): CallToolResult {
   else if (e instanceof NaiApiError) {
     msg = e.message;
     if (e.detail) msg += `\n서버 메시지: ${e.detail}`;
-    if (e.maybeCharged) msg += "\n⚠️ 요청이 NovelAI에 닿았을 수 있어서 Anlas가 빠졌을 수도 있어. nai_account로 잔액을 확인해 줘.";
-  } else msg = `예상 못 한 오류: ${(e as Error)?.message ?? String(e)}`;
+    if (e.maybeCharged) msg += "\n⚠️ 요청이 NovelAI에 전달되었을 수 있어 Anlas가 차감되었을 수도 있습니다. nai_account로 잔액을 확인해 주세요.";
+  } else msg = `예상하지 못한 오류: ${(e as Error)?.message ?? String(e)}`;
   const notice = ctx.updates.notice();
   return { isError: true, content: [text(notice ? `${msg}\n\n${notice}` : msg)] };
 }
@@ -102,7 +102,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
         const r = await ctx.serial.run(() => runGenerate(args, ctx));
         // 어떤 앱은 structuredContent만 보여 줘서, 사람이 읽을 글을 message에도 같이 넣는다
         if (r.status === "blocked") {
-          const msg = withNotice([`⛔ 생성 안 함. ${r.message}`], ctx);
+          const msg = withNotice([`⛔ 생성하지 않았습니다. ${r.message}`], ctx);
           return { content: [text(msg)], structuredContent: { status: "blocked", message: msg } };
         }
         if (r.status === "needs_confirmation") {
@@ -124,9 +124,9 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
         if (r.images.length === 0 && r.error) {
           lines.push(`❌ 생성 실패: ${r.error.message}${r.error.detail ? `\n서버 메시지: ${r.error.detail}` : ""}`);
           if (r.error.maybeCharged) {
-            lines.push("⚠️ 요청이 NovelAI에 닿았을 수 있어서 Anlas가 빠졌을 수도 있어.");
+            lines.push("⚠️ 요청이 NovelAI에 전달되었을 수 있어 Anlas가 차감되었을 수도 있습니다.");
           }
-          if (r.spent !== null) lines.push(`잔액 확인: ${r.spent} 차감 → 남은 ${r.anlasAfter}`);
+          if (r.spent !== null) lines.push(`잔액 확인: ${r.spent} 차감 → 잔액 ${r.anlasAfter}`);
           lines.push(...r.notes);
           const msg = withNotice(lines, ctx);
           return {
@@ -137,10 +137,10 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
         }
         lines.push(`✅ ${r.images.length}장 생성 (${r.model.label})`);
         r.images.forEach((im, i) => lines.push(`${i + 1}. ${im.path}  (seed ${im.seed}, ${im.width}x${im.height})`));
-        if (r.spent !== null) lines.push(`Anlas: ${r.spent} 사용 → 남은 ${r.anlasAfter}`);
+        if (r.spent !== null) lines.push(`Anlas: ${r.spent} 사용 → 잔액 ${r.anlasAfter}`);
         else lines.push(r.estimate.free ? "Anlas: 무료 조건" : `Anlas: 약 ${r.estimate.perImage * r.images.length} 사용 (잔액 확인 실패)`);
         if (r.error) {
-          lines.push(`⚠️ ${r.images.length + 1}번째에서 멈췄어: ${r.error.message}${r.error.detail ? ` (${r.error.detail})` : ""}`);
+          lines.push(`⚠️ ${r.images.length + 1}번째 장에서 중단되었습니다: ${r.error.message}${r.error.detail ? ` (${r.error.detail})` : ""}`);
         }
         lines.push(...r.notes);
         const msg = withNotice(lines, ctx);
@@ -182,7 +182,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
       ctx.updates.poke();
       try {
         if (!ctx.client.hasToken) throw new UserFacingError(
-          "NovelAI 토큰이 아직 설정돼 있지 않아. NovelAI 사이트 → User Settings → Account → Get Persistent API Token에서 pst-로 시작하는 토큰을 만들어서 확장 설정에 넣어 줘. 채팅창에는 붙여넣지 마.",
+          "NovelAI 토큰이 아직 설정되어 있지 않습니다. NovelAI 사이트 → User Settings → Account → Get Persistent API Token에서 pst-로 시작하는 토큰을 발급해 확장 프로그램 설정에 입력해 주세요. 채팅창에는 붙여넣지 마세요.",
         );
         const sub = await ctx.client.getSubscription();
         const a = accountStateOf(sub);
@@ -214,7 +214,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
             const v5 = costPerImage(resolveModel("v5-full")!, w as number, h as number, s as number);
             return `- ${label} · ${s}스텝: ${v45} / ${v5}`;
           }),
-          "(비공식 추정치. 실제 차감은 생성할 때마다 잔액 차이로 확인해.)",
+          "(비공식 추정치입니다. 실제 차감은 생성할 때마다 잔액 차이로 확인합니다.)",
         );
         const msg = withNotice(lines, ctx);
         return {
@@ -269,7 +269,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
         if (args.action === "list") {
           const all = await ctx.presets.list();
           if (all.length === 0) {
-            return { content: [text("저장된 프리셋이 아직 없어.")], structuredContent: { presets: [] } };
+            return { content: [text("저장된 프리셋이 아직 없습니다.")], structuredContent: { presets: [] } };
           }
           const lines = all.map(
             (p) => `- [${p.kind}] ${p.name}${p.prompt ? `: ${p.prompt.slice(0, 80)}${p.prompt.length > 80 ? "…" : ""}` : ""}${p.note ? ` (${p.note})` : ""}`,
@@ -279,19 +279,19 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
             structuredContent: { message: lines.join("\n"), presets: all.map((p) => ({ name: p.name, kind: p.kind })) },
           };
         }
-        if (!args.name) throw new UserFacingError("프리셋 이름(name)을 줘.");
+        if (!args.name) throw new UserFacingError("프리셋 이름(name)을 지정해 주세요.");
         if (args.action === "get") {
           const p = await ctx.presets.get(args.name);
-          if (!p) throw new UserFacingError(`"${args.name}" 프리셋이 없어.`);
+          if (!p) throw new UserFacingError(`"${args.name}" 프리셋이 없습니다.`);
           return { content: [text(JSON.stringify(p, null, 2))], structuredContent: { preset: p } };
         }
         if (args.action === "delete") {
           const ok = await ctx.presets.delete(args.name);
-          return { content: [text(ok ? `"${args.name}" 프리셋을 지웠어.` : `"${args.name}" 프리셋이 없어.`)] };
+          return { content: [text(ok ? `"${args.name}" 프리셋을 삭제했습니다.` : `"${args.name}" 프리셋이 없습니다.`)] };
         }
         // save
         if (args.model && !resolveModel(args.model)) {
-          throw new UserFacingError(`모델 "${args.model}"을 모르겠어. 쓸 수 있는 모델: ${MODELS.map((m) => m.key).join(", ")}`);
+          throw new UserFacingError(`알 수 없는 모델입니다: "${args.model}". 사용할 수 있는 모델: ${MODELS.map((m) => m.key).join(", ")}`);
         }
         if (args.size) {
           try {
@@ -303,7 +303,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
         const hasContent = [args.prompt, args.negative, args.model, args.size, args.steps, args.scale, args.sampler, args.characters].some(
           (v) => v !== undefined && v !== "",
         );
-        if (!hasContent) throw new UserFacingError("저장할 내용이 없어. prompt나 size 같은 값을 하나 이상 줘.");
+        if (!hasContent) throw new UserFacingError("저장할 내용이 없습니다. prompt나 size 같은 값을 하나 이상 지정해 주세요.");
         const r = await ctx.presets.save(args.name, {
           kind: args.kind ?? "other",
           prompt: args.prompt,
@@ -316,7 +316,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
           characters: args.characters,
           note: args.note,
         });
-        const saved = `"${r.name}" 프리셋을 ${r.created ? "저장했어" : "덮어썼어"}.`;
+        const saved = `"${r.name}" 프리셋을 ${r.created ? "저장했습니다" : "덮어썼습니다"}.`;
         return { content: [text(saved)], structuredContent: { message: saved, name: r.name, created: r.created } };
       } catch (e) {
         return errorResult(e, ctx);
@@ -337,9 +337,9 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
       await ctx.updates.check(true);
       const lines = [
         `nai-vibe-mcp v${VERSION} (비공식 도구 — NovelAI/Anlatan과 관계없음)`,
-        ctx.updates.notice() ?? (ctx.updates.latest ? "최신 버전이야." : GITHUB_REPO ? "업데이트 확인 실패 또는 꺼짐" : "업데이트 확인: 아직 배포 전"),
+        ctx.updates.notice() ?? (ctx.updates.latest ? "최신 버전입니다." : GITHUB_REPO ? "업데이트 확인 실패 또는 꺼짐" : "업데이트 확인: 아직 배포 전"),
         "",
-        "진단 정보 (문제 신고할 때 그대로 붙여 넣어 줘):",
+        "진단 정보 (문제를 신고할 때 그대로 붙여 넣어 주세요):",
         "```",
         `version: ${VERSION}`,
         `node: ${process.version} / ${os.platform()} ${os.arch()}`,

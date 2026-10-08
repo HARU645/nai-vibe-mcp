@@ -109,17 +109,17 @@ export function estimateCost(
   const withinOpus = width * height <= OPUS_FREE_PIXELS && steps <= OPUS_FREE_STEPS;
   const paid = (reason: string): CostEstimate => ({ perImage, count, total: perImage * count, free: false, reason });
 
-  if (!account) return paid("계정 정보를 못 읽어서 유료로 계산했어");
-  if (!account.opus) return paid("Opus 구독이 아니라서 모든 생성이 유료야");
+  if (!account) return paid("계정 정보를 읽지 못해 유료로 계산");
+  if (!account.opus) return paid("Opus 구독이 아니므로 모든 생성이 유료");
   if (!withinOpus) {
-    return paid(`Opus 무료 조건(1024x1024 이하 픽셀, ${OPUS_FREE_STEPS}스텝 이하)을 넘어서 유료야`);
+    return paid(`Opus 무료 조건(1024x1024 이하 픽셀, ${OPUS_FREE_STEPS}스텝 이하)을 넘어 유료`);
   }
   if (!model.opusUnlimited) {
     const a = account.v5Allowance;
-    if (!a || a.empty) return paid("V5 무료 할당량이 비어 있어서 유료야");
+    if (!a || a.empty) return paid("V5 무료 할당량이 비어 있어 유료");
     // 남은 할당량이 장 수보다 적으면 중간부터 유료가 될 수 있다 → 보수적으로 알림
     if (a.approxImages < count) {
-      return paid(`V5 할당량이 약 ${a.approxImages}장 남아서 일부는 유료가 될 수 있어`);
+      return paid(`V5 할당량이 약 ${a.approxImages}장 남아 일부는 유료가 될 수 있음`);
     }
     return { perImage, count, total: 0, free: true, reason: `Opus V5 할당량 안 (약 ${a.approxImages}장 남음)` };
   }

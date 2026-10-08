@@ -67,16 +67,16 @@ function checkPreset(name: string, p: unknown): Preset {
   const r = presetSchema.safeParse(p);
   if (!r.success) {
     const issue = r.error.issues[0];
-    throw new Error(`"${name}" 프리셋 값이 이상해 (${issue?.path.join(".") || "?"}: ${issue?.message}). nai_preset으로 다시 저장해 줘.`);
+    throw new Error(`"${name}" 프리셋 값이 올바르지 않습니다 (${issue?.path.join(".") || "?"}: ${issue?.message}). nai_preset으로 다시 저장해 주세요.`);
   }
   return r.data;
 }
 
 export function normalizePresetName(name: string): string {
   const n = name.normalize("NFC").trim().replace(/\s+/g, " ");
-  if (!n) throw new Error("프리셋 이름이 비어 있어.");
-  if (n.length > 60) throw new Error("프리셋 이름은 60자까지만 돼.");
-  if (RESERVED_NAMES.has(n.toLowerCase())) throw new Error(`"${n}"은 프리셋 이름으로 쓸 수 없어.`);
+  if (!n) throw new Error("프리셋 이름이 비어 있습니다.");
+  if (n.length > 60) throw new Error("프리셋 이름은 60자까지만 쓸 수 있습니다.");
+  if (RESERVED_NAMES.has(n.toLowerCase())) throw new Error(`"${n}"은(는) 프리셋 이름으로 쓸 수 없습니다.`);
   return n;
 }
 
@@ -91,7 +91,7 @@ export class PresetStore {
     const data = await readJson<PresetFile>(this.file);
     if (!data) return { schema: SCHEMA, presets: Object.create(null) };
     if (data.schema !== SCHEMA || typeof data.presets !== "object" || data.presets === null) {
-      throw new Error(`presets.json 형식(schema ${String(data.schema)})을 모르겠어. 새 버전으로 업데이트해 줘.`);
+      throw new Error(`presets.json 형식(schema ${String(data.schema)})을 알 수 없습니다. 새 버전으로 업데이트해 주세요.`);
     }
     // 프로토타입 없는 객체로 옮겨 담는다 (__proto__ 같은 키 문제 방지)
     const presets: Record<string, Preset> = Object.create(null);

@@ -100,7 +100,7 @@ async function saveImage(dirs: string[], base: string, png: Buffer, notes: strin
   for (const [i, dir] of dirs.entries()) {
     try {
       const file = await writeNewFile(dir, base, ".png", png);
-      if (i > 0) notes.push(`저장 폴더에 쓰지 못해서 임시 폴더에 저장했어: ${file} (저장 폴더 설정을 확인해 줘)`);
+      if (i > 0) notes.push(`저장 폴더에 쓰지 못해 임시 폴더에 저장했습니다: ${file} (저장 폴더 설정을 확인해 주세요)`);
       return file;
     } catch (e) {
       lastError = e;
@@ -113,7 +113,7 @@ export async function runGenerate(args: GenerateArgs, ctx: GenerateContext): Pro
   const { config, client, guard } = ctx;
   if (!client.hasToken) {
     throw new UserFacingError(
-      "NovelAI 토큰이 아직 설정돼 있지 않아. NovelAI 사이트 → User Settings → Account → Get Persistent API Token에서 pst-로 시작하는 토큰을 만들어서 확장 설정에 넣어 줘. 채팅창에는 붙여넣지 마.",
+      "NovelAI 토큰이 아직 설정되어 있지 않습니다. NovelAI 사이트 → User Settings → Account → Get Persistent API Token에서 pst-로 시작하는 토큰을 발급해 확장 프로그램 설정에 입력해 주세요. 채팅창에는 붙여넣지 마세요.",
     );
   }
 
@@ -125,7 +125,7 @@ export async function runGenerate(args: GenerateArgs, ctx: GenerateContext): Pro
     if (!p) {
       const all = (await ctx.presets.list()).map((x) => x.name);
       throw new UserFacingError(
-        `"${name}" 프리셋이 없어. ${all.length ? `있는 프리셋: ${all.join(", ")}` : "저장된 프리셋이 아직 없어."}`,
+        `"${name}" 프리셋이 없습니다. ${all.length ? `저장된 프리셋: ${all.join(", ")}` : "저장된 프리셋이 아직 없습니다."}`,
       );
     }
     loaded.push(p);
@@ -135,7 +135,7 @@ export async function runGenerate(args: GenerateArgs, ctx: GenerateContext): Pro
   const modelName = args.model ?? pickLast(loaded, (p) => p.model);
   const model = modelName ? resolveModel(modelName) : config.defaultModel;
   if (!model) {
-    throw new UserFacingError(`모델 "${modelName}"을 모르겠어. 쓸 수 있는 모델: ${MODELS.map((m) => m.key).join(", ")}`);
+    throw new UserFacingError(`알 수 없는 모델입니다: "${modelName}". 사용할 수 있는 모델: ${MODELS.map((m) => m.key).join(", ")}`);
   }
   let size: Size;
   try {
@@ -147,24 +147,24 @@ export async function runGenerate(args: GenerateArgs, ctx: GenerateContext): Pro
   const scale = args.scale ?? pickLast(loaded, (p) => p.scale) ?? DEFAULT_SCALE;
   const samplerRaw = args.sampler ?? pickLast(loaded, (p) => p.sampler) ?? DEFAULT_SAMPLER;
   if (!(SAMPLERS as readonly string[]).includes(samplerRaw)) {
-    throw new UserFacingError(`샘플러 "${samplerRaw}"는 안 돼. 쓸 수 있는 것: ${SAMPLERS.join(", ")}`);
+    throw new UserFacingError(`사용할 수 없는 샘플러입니다: "${samplerRaw}". 사용할 수 있는 샘플러: ${SAMPLERS.join(", ")}`);
   }
   const sampler = samplerRaw as Sampler;
   const count = args.count ?? 1;
   if (count > config.maxCount) {
-    throw new UserFacingError(`한 번에 ${config.maxCount}장까지만 뽑을 수 있어 (설정: 한 번에 뽑는 최대 장 수).`);
+    throw new UserFacingError(`한 번에 ${config.maxCount}장까지만 생성할 수 있습니다 (설정: 한 번에 뽑는 최대 장 수).`);
   }
 
   const userPrompt = joinTags(...loaded.map((p) => p.prompt), args.prompt);
   const userNegative = joinTags(args.negative, ...loaded.map((p) => p.negative));
   const rawChars: PresetCharacter[] = [...loaded.flatMap((p) => p.characters ?? []), ...(args.characters ?? [])];
   if (rawChars.length > model.maxCharacters) {
-    throw new UserFacingError(`${model.label}은 캐릭터를 ${model.maxCharacters}명까지만 따로 지정할 수 있어.`);
+    throw new UserFacingError(`${model.label}에서는 캐릭터를 ${model.maxCharacters}명까지만 따로 지정할 수 있습니다.`);
   }
   const characters: CharacterInput[] = rawChars.map((c) => {
     const center = parsePosition(c.position);
     if (c.position !== undefined && !center) {
-      throw new UserFacingError(`캐릭터 위치 "${String(c.position)}"를 모르겠어. A1~E5 칸 이름이나 {x, y}(0~1)로 줘.`);
+      throw new UserFacingError(`알 수 없는 캐릭터 위치입니다: "${String(c.position)}". A1~E5 칸 이름이나 {x, y}(0~1) 형식으로 지정해 주세요.`);
     }
     return { prompt: composeCharacterText(c.prompt), negative: composeCharacterText(c.negative), center };
   });
@@ -173,14 +173,14 @@ export async function runGenerate(args: GenerateArgs, ctx: GenerateContext): Pro
   const ucPreset = args.uc_preset ?? "heavy";
   const composed = composePrompt(model, userPrompt, quality);
   const negative = composeNegative(model, userNegative, composed.text, ucPreset, config.nsfwGuard);
-  if (!composed.text.trim()) throw new UserFacingError("프롬프트가 비어 있어.");
+  if (!composed.text.trim()) throw new UserFacingError("프롬프트가 비어 있습니다.");
 
   const notes: string[] = [];
   if (model.family !== "v5" && characters.some((c) => c.center)) {
-    notes.push("V4.5는 캐릭터 위치를 5x5 칸(A1~E5) 중심에 맞춰서 보냈어.");
+    notes.push("V4.5는 캐릭터 위치를 5x5 칸(A1~E5)의 중심에 맞춰 보냈습니다.");
   }
   if (model.family === "v5" && characters.length === 1 && characters[0]!.center) {
-    notes.push("V5는 캐릭터가 1명이면 위치를 무시하고 가운데에 두는 편이야 (NovelAI 쪽 동작).");
+    notes.push("V5는 캐릭터가 1명이면 위치를 무시하고 가운데에 두는 경향이 있습니다 (NovelAI 쪽 동작).");
   }
 
   // 3. 계정 상태 → 비용 판단
@@ -192,7 +192,7 @@ export async function runGenerate(args: GenerateArgs, ctx: GenerateContext): Pro
     anlasBefore = anlasOf(sub);
   } catch (e) {
     if (e instanceof NaiApiError && (e.kind === "unauthorized" || e.kind === "no_token")) throw e;
-    notes.push("계정 정보를 못 읽어서 비용을 유료 기준으로 계산했어.");
+    notes.push("계정 정보를 읽지 못해 비용을 유료 기준으로 계산했습니다.");
   }
   const rawEstimate = estimateCost(model, size.width, size.height, steps, count, account);
 
@@ -271,7 +271,7 @@ export async function runGenerate(args: GenerateArgs, ctx: GenerateContext): Pro
       try {
         preview = makePreview(png);
       } catch {
-        notes.push(`${path.basename(file)} 미리보기를 못 만들었어 (원본은 저장됨).`);
+        notes.push(`${path.basename(file)} 미리보기를 만들지 못했습니다 (원본은 저장되었습니다).`);
       }
       images.push({ path: file, seed, width: size.width, height: size.height, preview });
       await ctx.history
@@ -297,7 +297,7 @@ export async function runGenerate(args: GenerateArgs, ctx: GenerateContext): Pro
           characters,
           estimatedAnlas: estimate.free ? 0 : estimate.perImage,
         })
-        .catch(() => notes.push("생성 기록을 저장하지 못했어."));
+        .catch(() => notes.push("생성 기록을 저장하지 못했습니다."));
     }
   } catch (e) {
     // 그림을 받은 뒤 저장 등에서 터진 경우: 과금됐을 수 있다
@@ -306,7 +306,7 @@ export async function runGenerate(args: GenerateArgs, ctx: GenerateContext): Pro
         ? e
         : new NaiApiError(
             "bad_response",
-            `그림을 받은 뒤 처리하다 오류가 났어: ${(e as Error)?.message ?? String(e)}`,
+            `그림을 받은 뒤 처리하는 중 오류가 발생했습니다: ${(e as Error)?.message ?? String(e)}`,
             undefined,
             undefined,
             true,
@@ -350,9 +350,9 @@ export async function runGenerate(args: GenerateArgs, ctx: GenerateContext): Pro
     .catch(() => undefined);
 
   if (failure?.maybeCharged && spent !== null && spent > expected) {
-    notes.push(`실패한 요청에서도 Anlas가 빠졌어 (이번에 총 ${spent} 차감).`);
+    notes.push(`실패한 요청에서도 Anlas가 차감되었습니다 (이번 요청에서 총 ${spent} 차감).`);
   } else if (!failure && spent !== null && spent !== expected) {
-    notes.push(`예상(${expected})과 실제 차감(${spent})이 달라. 기록해 뒀어 — 비용 공식 보정에 써.`);
+    notes.push(`예상(${expected})과 실제 차감(${spent})이 다릅니다. 비용 공식 보정을 위해 기록해 두었습니다.`);
   }
 
   return {

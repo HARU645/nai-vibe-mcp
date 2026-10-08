@@ -76,7 +76,7 @@ export class UpdateChecker {
   notice(): string | undefined {
     const m = this.memo;
     if (!m?.latest || compareVersions(m.latest, VERSION) <= 0) return undefined;
-    return `📦 nai-vibe-mcp ${m.latest}이 나왔어 (지금 v${VERSION}). 받는 곳: ${m.url ?? `https://github.com/${GITHUB_REPO}/releases`}`;
+    return `📦 새 버전이 나왔습니다: nai-vibe-mcp ${m.latest} (현재 v${VERSION}). 받는 곳: ${m.url ?? `https://github.com/${GITHUB_REPO}/releases`}`;
   }
 
   get latest(): string | undefined {

@@ -36,7 +36,7 @@ export async function readJson<T>(file: string): Promise<T | undefined> {
     return JSON.parse(await fs.readFile(file, "utf8")) as T;
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw new Error(`${path.basename(file)} 파일을 읽지 못했어: ${(e as Error).message}`);
+    throw new Error(`${path.basename(file)} 파일을 읽지 못했습니다: ${(e as Error).message}`);
   }
 }
 
@@ -65,5 +65,5 @@ export async function writeNewFile(dir: string, base: string, ext: string, data:
       if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
     }
   }
-  throw new Error("저장할 파일 이름을 만들지 못했어.");
+  throw new Error("저장할 파일 이름을 만들지 못했습니다.");
 }

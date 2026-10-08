@@ -45,7 +45,7 @@ export function parseSize(input: string): Size {
   const m = /^(\d{2,4})\s*[x×*]\s*(\d{2,4})$/.exec(raw);
   if (!m) {
     throw new Error(
-      `크기 "${input}"을(를) 모르겠어. ${Object.keys(SIZE_PRESETS).join(", ")} 중 하나나 832x1216 같은 형식으로 줘.`,
+      `알 수 없는 크기입니다: "${input}". ${Object.keys(SIZE_PRESETS).join(", ")} 중 하나나 832x1216 같은 형식으로 지정해 주세요.`,
     );
   }
   return validateSize({ width: Number(m[1]), height: Number(m[2]) });
@@ -56,10 +56,10 @@ export function validateSize(s: Size): Size {
     ["가로", s.width],
     ["세로", s.height],
   ] as const) {
-    if (v < MIN_SIDE || v > MAX_SIDE) throw new Error(`${label} ${v}px은 안 돼. ${MIN_SIDE}~${MAX_SIDE} 사이여야 해.`);
+    if (v < MIN_SIDE || v > MAX_SIDE) throw new Error(`${label} ${v}px은 사용할 수 없습니다. ${MIN_SIDE}~${MAX_SIDE} 사이여야 합니다.`);
     if (v % 64 !== 0) {
       const near = Math.round(v / 64) * 64;
-      throw new Error(`${label} ${v}px은 64의 배수가 아니야. ${near}px은 어때?`);
+      throw new Error(`${label} ${v}px은 64의 배수가 아닙니다. ${near}px을 사용해 보세요.`);
     }
   }
   return s;

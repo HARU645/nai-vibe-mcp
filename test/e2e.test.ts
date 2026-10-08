@@ -203,7 +203,7 @@ describe("생성 + 비용 가드", () => {
     const { client } = await connect({ NAI_COST_MODE: "allow", NAI_ALLOW_MAX: "100" });
     const r: any = await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } });
     expect(r.structuredContent.status).toBe("blocked");
-    expect(textOf(r)).toContain("모자라");
+    expect(textOf(r)).toContain("부족합니다");
   });
 });
 
@@ -237,7 +237,7 @@ describe("오류", () => {
     const r: any = await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl", count: 3 } });
     expect(r.structuredContent.status).toBe("partial");
     expect(r.structuredContent.images.length).toBe(1);
-    expect(textOf(r)).toContain("2번째에서 멈췄어");
+    expect(textOf(r)).toContain("2번째 장에서 중단");
   });
 
   it("토큰이 결과·저장 파일 어디에도 안 남는다", async () => {
@@ -284,7 +284,7 @@ describe("프리셋", () => {
     expect(textOf(missing)).toContain("파스텔 화풍");
 
     const del: any = await client.callTool({ name: "nai_preset", arguments: { action: "delete", name: "파스텔 화풍" } });
-    expect(textOf(del)).toContain("지웠어");
+    expect(textOf(del)).toContain("삭제했습니다");
   });
 
   it("잘못된 크기·모델은 저장 안 한다", async () => {
@@ -363,7 +363,7 @@ describe("리뷰에서 나온 경우들", () => {
     const { client, ctx } = await connect({ NAI_COST_MODE: "allow", NAI_ALLOW_MAX: "100" });
     const r: any = await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } });
     expect(r.isError).toBe(true);
-    expect(textOf(r)).toContain("빠졌을 수도");
+    expect(textOf(r)).toContain("차감되었을 수도");
     expect(ctx.guard.sessionSpent).toBe(17);
     const ledger = await fs.readFile(path.join(outDir, ".nai-vibe", "ledger.jsonl"), "utf8");
     expect(JSON.parse(ledger.trim())).toMatchObject({ generated: 0, actual: 17 });
@@ -376,7 +376,7 @@ describe("리뷰에서 나온 경우들", () => {
     const r: any = await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } });
     expect(Date.now() - t0).toBeLessThan(15_000);
     expect(r.isError).toBe(true);
-    expect(textOf(r)).toContain("답하지 않았어");
+    expect(textOf(r)).toContain("응답하지 않았습니다");
     const r2: any = await client.callTool({ name: "nai_account", arguments: {} });
     expect(r2.isError).toBeFalsy();
   }, 30_000);

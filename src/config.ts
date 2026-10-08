@@ -31,7 +31,7 @@ function env(name: string, e: NodeJS.ProcessEnv, warnings?: string[]): string | 
   if (t === "") return undefined;
   // .mcpb가 치환 못 한 자리표시자(${user_config.x}, ${HOME} 등)는 설정 안 한 걸로 본다
   if (t.includes("${")) {
-    if (!/^\$\{user_config\.[^}]+\}$/.test(t)) warnings?.push(`${name} 값에 바뀌지 않은 \${…}가 있어서 무시했어`);
+    if (!/^\$\{user_config\.[^}]+\}$/.test(t)) warnings?.push(`${name} 값에 치환되지 않은 \${…}가 있어 무시했습니다`);
     return undefined;
   }
   return t;
@@ -42,7 +42,7 @@ function num(name: string, e: NodeJS.ProcessEnv, def: number, min: number, max: 
   if (raw === undefined) return def;
   const n = Number(raw);
   if (!Number.isFinite(n) || n < min || n > max) {
-    warnings.push(`${name}=${raw} 값이 이상해서 기본값 ${def}을 썼어 (${min}~${max})`);
+    warnings.push(`${name}=${raw} 값이 올바르지 않아 기본값(${def})을 사용했습니다 (${min}~${max})`);
     return def;
   }
   return Math.floor(n);
@@ -65,13 +65,13 @@ export function loadConfig(e: NodeJS.ProcessEnv = process.env): Config {
   const modelRaw = env("NAI_DEFAULT_MODEL", e);
   let defaultModel = resolveModel(modelRaw ?? "v4.5-full") ?? MODELS[2]!;
   if (modelRaw && !resolveModel(modelRaw)) {
-    warnings.push(`NAI_DEFAULT_MODEL=${modelRaw}을 몰라서 ${defaultModel.key}를 썼어`);
+    warnings.push(`알 수 없는 NAI_DEFAULT_MODEL 값(${modelRaw})이라 기본 모델(${defaultModel.key})을 사용했습니다`);
   }
 
   const modeRaw = (env("NAI_COST_MODE", e) ?? "confirm").toLowerCase();
   let costMode: CostMode = "confirm";
   if (modeRaw === "confirm" || modeRaw === "free_only" || modeRaw === "allow") costMode = modeRaw;
-  else warnings.push(`NAI_COST_MODE=${modeRaw}을 몰라서 confirm을 썼어`);
+  else warnings.push(`알 수 없는 NAI_COST_MODE 값(${modeRaw})이라 confirm을 사용했습니다`);
 
   return {
     token,
