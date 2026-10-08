@@ -9,6 +9,7 @@ Claude에게 한국어로 말하면 NovelAI로 그림을 생성해 주는 MCP �
 ## 주요 기능
 
 - **비용 가드** — Anlas가 드는 요청은 생성 전에 예상 비용과 잔액을 먼저 보여 주고, 사용자가 승인해야 실행합니다. Opus 무료 조건에 해당하면 묻지 않고 바로 생성합니다.
+- **화풍 찾기** — 원하는 느낌을 말하면 어울릴 작가 태그 후보를 같은 시드로 나란히 뽑아 번호 붙은 비교 시트로 보여 줍니다. 마음에 드는 번호나 섞은 조합은 그대로 화풍 프리셋으로 저장됩니다.
 - **프리셋** — 자주 쓰는 화풍·캐릭터·의상·크기를 이름으로 저장해 두고 "파스텔 화풍으로", "우리 메이드 애로"처럼 불러 쓸 수 있습니다.
 - **날짜별 저장 + 기록** — 원본 PNG는 `저장 폴더/2026-10-08/` 같은 폴더에 저장되고, 설정은 기록 파일에 남아 시드까지 다시 사용할 수 있습니다.
 - **한국어** — 안내·오류 메시지가 모두 한국어입니다.
@@ -58,6 +59,32 @@ V5로 "OPEN"이라고 써 있는 간판 든 여자애 그려 줘
 
 Claude가 비용을 물어보면 숫자를 확인한 뒤 "응 진행해"처럼 답하면 됩니다.
 
+## 화풍 찾기
+
+작가 태그를 몰라도 원하는 느낌으로 화풍을 찾을 수 있습니다.
+
+```
+몽환적인 파스텔 수채화 느낌 화풍 찾아 줘
+```
+```
+3번이랑 5번을 6:4로 섞은 것도 비교해 줘
+```
+```
+2번을 "몽환 파스텔" 화풍으로 저장해 줘
+```
+```
+몽환 파스텔 화풍으로 카페에 있는 은발 메이드
+```
+
+1. Claude가 어울릴 만한 작가 태그 후보를 고르고, 태그 표기를 NovelAI 자동완성으로 확인합니다 (무료).
+2. 같은 시드·같은 장면으로 후보마다 한 장씩 뽑아 **번호 붙은 비교 시트** 한 장으로 보여 줍니다 (최대 12칸). 첫 비교에는 작가 태그를 뺀 **기준 칸**이 같이 들어갑니다.
+3. 마음에 드는 번호를 고르면 섞기·강도를 바꿔 다시 비교할 수 있고, 최종 조합은 번호만 말하면 그대로 화풍 프리셋으로 저장됩니다.
+
+- 비교 시트는 `저장 폴더/날짜/compare_시각/`에 개별 그림, `sheet.jpg`(시트), `sheet.txt`(번호별 태그)로 저장됩니다.
+- 비용은 시트 전체를 한 번에 확인받습니다. 크기를 따로 정하지 않으면 Opus + V4.5는 보통 크기(무료), 그 밖에는 작은 세로(512x768, 장당 7 Anlas)로 뽑습니다. 예: 후보 6개 + 기준 칸 = 약 49 Anlas.
+- NovelAI 자동완성은 현대 작가 태그를 보여 주지 않아서, 작가 태그가 실제로 먹는지는 시트에서 기준 칸과 비교해 확인합니다. 기준 칸과 거의 같은 칸은 모델이 모르는 이름일 수 있습니다.
+- Claude가 고른 후보가 원하는 화풍이라는 보장은 없습니다. 시트를 직접 보고 고르세요.
+
 ## 비용 (Anlas)
 
 NovelAI에는 비용 조회 API가 없어서, 웹 클라이언트와 같은 공식으로 비용을 **추정**합니다. 실제로 차감된 양은 생성할 때마다 잔액 차이로 확인해 알려 드립니다.
@@ -98,7 +125,7 @@ V5는 같은 크기에서 V4.5보다 1.5배 비쌉니다.
 | 비용 모드 | `confirm` | 위 설명 참고 |
 | 자동 허용 상한 | 30 | allow 모드에서 묻지 않고 실행하는 요청 하나의 최대 Anlas |
 | 세션 Anlas 상한 | 1000 | 0이면 상한 없음 |
-| 한 번에 뽑는 최대 장 수 | 4 | 1~8 |
+| 한 번에 뽑는 최대 장 수 | 4 | 1~8. 화풍 비교 시트는 따로 최대 12칸 (비용 확인은 똑같이 받음) |
 | 기본 nsfw 가드 | 켜짐 | Full 모델에서 NovelAI 웹처럼 기본 네거티브 앞에 `nsfw`를 붙여, 평범한 프롬프트가 수위 쪽으로 새지 않게 함 |
 | 새 버전 알림 | 켜짐 | 하루 한 번 GitHub에서 최신 버전 번호만 확인 |
 
@@ -107,10 +134,12 @@ V5는 같은 크기에서 V4.5보다 1.5배 비쌉니다.
 ```
 저장 폴더/
 ├─ 2026-10-08/
-│   └─ nai_153012_1234567890.png   ← 원본 (NovelAI 메타데이터 그대로)
+│   ├─ nai_153012_1234567890.png   ← 원본 (NovelAI 메타데이터 그대로)
+│   └─ compare_154500/             ← 화풍 비교 시트 (01_시드.png…, sheet.jpg, sheet.txt)
 └─ .nai-vibe/
     ├─ presets.json    ← 프리셋
     ├─ history.jsonl   ← 그림별 설정 (프롬프트, 시드, 모델…)
+    ├─ sheets.jsonl    ← 비교 시트별 번호와 태그 (번호로 프리셋 저장할 때 씀)
     └─ ledger.jsonl    ← 요청별 예상 비용 / 실제 차감
 ```
 
@@ -173,4 +202,4 @@ MIT
 
 ## English summary
 
-Unofficial MCP server that lets Claude (and other local MCP clients) generate images with your own NovelAI account. Bring your own Persistent API Token (`pst-...`). Features: cost guard (paid requests need explicit confirmation; Opus-free requests run immediately), named presets, dated output folders, generation history and an Anlas ledger. Install the `.mcpb` in Claude Desktop, enter your token, and ask "check my NovelAI connection". Not affiliated with NovelAI/Anlatan.
+Unofficial MCP server that lets Claude (and other local MCP clients) generate images with your own NovelAI account. Bring your own Persistent API Token (`pst-...`). Features: cost guard (paid requests need explicit confirmation; Opus-free requests run immediately), style finder (same-seed comparison sheets of artist-tag candidates, save a cell as a style preset), named presets, dated output folders, generation history and an Anlas ledger. Install the `.mcpb` in Claude Desktop, enter your token, and ask "check my NovelAI connection". Not affiliated with NovelAI/Anlatan.

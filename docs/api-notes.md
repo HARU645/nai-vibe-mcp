@@ -18,7 +18,7 @@
   - `POST /ai/generate-image` — 생성 (응답: zip) ← **우리가 쓸 것**
   - `POST /ai/generate-image-stream` — 생성 + 중간 단계 (msgpack 스트림)
   - `GET /user/subscription` — 구독·잔액·V5 할당량. **이제 이미지 호스트에 있음** (api.novelai.net의 `/user/*`는 "이미지 URL로 바꾸라"는 400을 돌려준다고 SDK·MooshieUI 둘 다 기록) — 확인됨
-  - `POST /ai/generate-image/suggest-tags` — 태그 추천
+  - `GET /ai/generate-image/suggest-tags?model=&prompt=&lang=en` — 태그 자동완성 (Anlas 안 듦). 11장 참고 — 확인됨
   - `POST /ai/encode-vibe`, `POST /ai/augment-image`(디렉터 도구) — 나중 단계
 - `POST /ai/upscale` — 호스트가 출처마다 다름 (SDK: image, MooshieUI 코드: api.novelai.net). 나중 단계라 그때 확인
 - 인증: `Authorization: Bearer pst-...` (Persistent API Token 그대로) + `Content-Type: application/json` — 확인됨
@@ -222,3 +222,16 @@ base  = ceil(2.951823174884865e-6 * px + 5.753298233447344e-7 * px * steps)
 - 요청이 나간 뒤엔 자동 재시도 없음 (429만 예외). 생성 전후 잔액을 기록
 - 비용 공식은 `src/cost/cost.ts`의 `COST_RULES` 표 하나로 (모델 세대별 계수, V4.5 1.0 / V5 1.5)
 - v1 모델: V5 Full·Curated, V4.5 Full·Curated
+
+## 11. 태그 자동완성 (`GET /ai/generate-image/suggest-tags`) — 2026-10-08 실측
+
+- 요청: `GET https://image.novelai.net/ai/generate-image/suggest-tags?model=<모델 id>&prompt=<입력 중인 태그>&lang=en`, `Authorization: Bearer pst-…`. 출처 novelai-python(`sdk/ai/generate_image/suggest_tags.py`) — 비구독 계정으로 동작 확인
+- 응답: `{ "tags": [{ "tag": "silver hair", "count": 10000, "confidence": 0 }, …] }`
+  - `count`는 **10000에서 잘림** (자주 쓰는 태그는 다 10000)
+  - `confidence`는 모델이 얼마나 아는지가 아니라 **글자 유사도**로 보임: 입력과 앞부분이 같은 태그는 0, 비슷한 철자는 0.5~0.9 → 화면에 안 보여 줌
+  - 밑줄 대신 공백 표기, 작품 이름 괄호 그대로 (`kurumi (kantoku)`)
+- **현대 작가 태그는 자동완성에 안 나옴** (V4.5 Full·V5 Full 같음): `artist:wlop`, `kantoku`, `fuzichoco`, `as109`, `ilya kuvshinov`, `sakimichan`, `mika pikazo`, `hiten`, `ningen mame` 전부 없음. 접두어 없이 물어도 없음
+  - 나오는 `artist:` 태그는 옛날 서양 화가뿐 (`artist:rembrandt` 9,500, `artist:cornelis pronk` 등 네덜란드 화가 다수). `alphonse mucha`도 없음
+  - 그런데 모델은 앎: 같은 시드(20261008) 비교 시트에서 `artist:wlop`은 반실사 유화풍, `artist:kantoku`는 칸토쿠 그림체가 확실히 나오고, 지어낸 `artist:nobodyxyz123`은 평범한 기본 애니 그림체 (V4.5 Full 512x768·23, 3칸 21 Anlas, 예상과 같음)
+  - → 작가 태그는 자동완성으로 확인 불가. `nai_tags`는 artist: 태그가 안 나오면 "unlisted(확인 불가)"로 두고, 확인은 비교 시트의 **기준 칸**(작가 태그 없음)과 비교해서 한다. 기준과 거의 같으면 모델이 모르는 이름일 가능성
+- 쓸모 있는 것: 일반 태그·캐릭터·작품 표기 확인, `artist:watercolor (medium)`처럼 일반 태그를 작가로 착각한 경우 잡기

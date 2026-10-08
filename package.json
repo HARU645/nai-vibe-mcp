@@ -1,6 +1,6 @@
 {
   "name": "nai-vibe-mcp",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "말로 NovelAI 짤뽑 — NovelAI 이미지 생성을 Claude 등 MCP 앱에서 쓰게 해 주는 비공식 MCP 서버",
   "license": "MIT",
   "author": "haru645",

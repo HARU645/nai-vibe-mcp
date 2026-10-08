@@ -13,6 +13,8 @@ export interface SheetVariant {
   prompt: string;
   /** 저장된 원본 그림 (생성 실패면 없음) */
   file?: string;
+  /** 칸 태그 없는 기준 칸 */
+  baseline?: boolean;
 }
 
 export interface SheetRecord {

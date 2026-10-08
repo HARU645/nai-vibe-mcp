@@ -108,10 +108,12 @@ describe("nai_tags", () => {
     const res = r.structuredContent.results;
     expect(res[0]).toMatchObject({ query: "artist:wlop", found: true, tag: "artist:wlop", count: 5123 });
     expect(res[1].found).toBe(true);
-    expect(res[2].found).toBe(false);
+    expect(res[2]).toMatchObject({ found: false, status: "unlisted" });
     expect(res[3].found).toBe(true); // 접두어 없이 물어봐도 artist: 태그와 맞춰 본다
     expect(textOf(r)).toContain("✅ artist:wlop");
-    expect(textOf(r)).toContain("❌ artist:nobody_xyz");
+    // 작가 태그는 자동완성에 없어도 "없음"이라고 하지 않는다 (NovelAI가 작가 태그를 숨김)
+    expect(textOf(r)).toContain("❔ artist:nobody_xyz — 자동완성에 없음 (확인 불가)");
+    expect(textOf(r)).toContain("기준 칸");
     expect(fake.generateBodies().length).toBe(0);
     expect(fake.state.anlas).toBe(1000);
     const q = new URL(suggestRequests()[0]!.path, "http://x").searchParams;
@@ -119,18 +121,18 @@ describe("nai_tags", () => {
     expect(q.get("lang")).toBe("en");
   });
 
-  it("없는 이름이면 비슷한 태그를 보여 준다", async () => {
+  it("일반 태그가 없으면 비슷한 표기를 보여 준다 (사용량은 10,000에서 잘림)", async () => {
     const { client } = await connect();
-    const r: any = await client.callTool({ name: "nai_tags", arguments: { tags: ["artist:wlo"] } });
-    expect(r.structuredContent.results[0].found).toBe(false);
-    expect(textOf(r)).toContain("비슷한 태그: artist:wlop (5,123)");
+    const r: any = await client.callTool({ name: "nai_tags", arguments: { tags: ["silver hai"] } });
+    expect(r.structuredContent.results[0].status).toBe("not_found");
+    expect(textOf(r)).toContain("❌ silver hai — 없음. 비슷한 태그: silver hair (10,000+)");
   });
 
   it("artist:로 물었는데 일반 태그만 있으면 아티스트로 인정하지 않는다", async () => {
     const { client } = await connect();
     const r: any = await client.callTool({ name: "nai_tags", arguments: { tags: ["artist:silver hair"] } });
     expect(r.structuredContent.results[0]).toMatchObject({ status: "general_only", found: false });
-    expect(textOf(r)).toContain("아티스트 태그로는 없음");
+    expect(textOf(r)).toContain("작가 태그가 아니라 일반 태그입니다");
   });
 
   it("응답 형식이 바뀌면 '전부 없음' 대신 오류로 알린다", async () => {
@@ -205,6 +207,29 @@ describe("nai_compare", () => {
     const r: any = await client.callTool({ name: "nai_compare", arguments: { variants, seed: 42 } });
     expect(r.structuredContent.status).toBe("done");
     expect(fake.generateBodies().every((b) => b.parameters.width === 832 && b.parameters.seed === 42)).toBe(true);
+  });
+
+  it("기준 칸: 칸 태그 없이 같은 시드로 하나 더 뽑고, 그 칸은 프리셋으로 저장하지 않는다", async () => {
+    const { client, ctx } = await connect({ NAI_COST_MODE: "allow", NAI_ALLOW_MAX: "100" });
+    const r: any = await client.callTool({
+      name: "nai_compare",
+      arguments: { variants: [{ prompt: "artist:wlop" }, { prompt: "artist:kantoku" }], baseline: true },
+    });
+    expect(r.structuredContent.status).toBe("done");
+    const bodies = fake.generateBodies();
+    expect(bodies.length).toBe(3);
+    expect(bodies[2].input.startsWith("1girl, solo")).toBe(true);
+    expect(new Set(bodies.map((b) => b.parameters.seed)).size).toBe(1);
+    expect(textOf(r)).toContain("3. 기준 (화풍 태그 없음)");
+    expect((await ctx.sheets.get())!.variants[2]).toMatchObject({ n: 3, baseline: true, prompt: "" });
+    const s: any = await client.callTool({ name: "nai_preset", arguments: { action: "save", name: "b", from_sheet: { number: 3 } } });
+    expect(s.isError).toBe(true);
+    expect(textOf(s)).toContain("기준 칸");
+    // 기준 칸 하나만으로는 비교가 안 된다 (작가 1개 + 기준은 됨)
+    const one: any = await client.callTool({ name: "nai_compare", arguments: { variants: [{ prompt: "artist:a" }] } });
+    expect(one.isError).toBe(true);
+    const ok: any = await client.callTool({ name: "nai_compare", arguments: { variants: [{ prompt: "artist:a" }], baseline: true } });
+    expect(ok.structuredContent.status).toBe("done");
   });
 
   it("13칸 이상은 받지 않는다", async () => {

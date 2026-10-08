@@ -39,8 +39,12 @@ export interface CompareVariant {
   label?: string;
 }
 
+export const BASELINE_LABEL = "기준 (화풍 태그 없음)";
+
 export interface CompareArgs extends CommonArgs {
   variants: CompareVariant[];
+  /** 마지막에 칸 태그 없는 기준 칸을 하나 더 넣는다 (작가 태그가 실제로 먹는지 비교용) */
+  baseline?: boolean;
   /** 모든 칸에 공통으로 들어갈 장면 태그 */
   prompt?: string;
   seed?: number;
@@ -70,20 +74,30 @@ export type CompareOutcome =
   | { status: "needs_confirmation"; confirmId: string; message: string; estimate: CostEstimate; model: ModelInfo }
   | { status: "blocked"; message: string; estimate?: CostEstimate };
 
+/** 시트 칸 한 줄 설명: 태그 (이름). 기준 칸은 이름만 */
+export function variantLine(v: SheetVariant): string {
+  const one = (t: string) => t.replace(/\r?\n/g, " ");
+  if (v.baseline || !v.prompt) return v.label;
+  return `${one(v.prompt)}${v.label !== v.prompt ? `  (${one(v.label)})` : ""}`;
+}
+
 export async function runCompare(args: CompareArgs, ctx: GenerateContext): Promise<CompareOutcome> {
   const { config, client, guard } = ctx;
   requireToken(client);
 
-  const variants = args.variants.map((v, i) => ({
+  const variants: SheetVariant[] = args.variants.map((v, i) => ({
     n: i + 1,
     prompt: v.prompt.trim(),
     label: (v.label ?? "").trim() || v.prompt.trim(),
   }));
-  if (variants.length < MIN_VARIANTS || variants.length > MAX_VARIANTS) {
-    throw new UserFacingError(`비교 시트는 ${MIN_VARIANTS}~${MAX_VARIANTS}칸까지 만들 수 있습니다 (지금 ${variants.length}칸).`);
-  }
   const empty = variants.find((v) => !v.prompt);
   if (empty) throw new UserFacingError(`${empty.n}번 칸의 태그(prompt)가 비어 있습니다.`);
+  if (args.baseline) variants.push({ n: variants.length + 1, prompt: "", label: BASELINE_LABEL, baseline: true });
+  if (variants.length < MIN_VARIANTS || variants.length > MAX_VARIANTS) {
+    throw new UserFacingError(
+      `비교 시트는 기준 칸을 포함해 ${MIN_VARIANTS}~${MAX_VARIANTS}칸까지 만들 수 있습니다 (지금 ${variants.length}칸).`,
+    );
+  }
 
   const notes: string[] = [];
   // 계정을 먼저 본다: 크기를 안 정했으면 Opus + V4.5(무료)는 보통 크기, 그 밖엔 비용을 줄이려고 작은 크기
@@ -151,9 +165,7 @@ export async function runCompare(args: CompareArgs, ctx: GenerateContext): Promi
       `비교 시트 ${sheetId} — ${r.model.label}, ${r.size.width}x${r.size.height}, ${r.steps}스텝, 시드 ${seed}`,
       `공통 프롬프트: ${oneLine(joinTags(r.presetPrompt, basePrompt))}`,
       "",
-      ...outVariants.map(
-        (v) => `${v.n}. ${oneLine(v.prompt)}${v.label !== v.prompt ? `  (${oneLine(v.label)})` : ""}${v.file ? "" : "  — 생성 안 됨"}`,
-      ),
+      ...outVariants.map((v) => `${v.n}. ${variantLine(v)}${v.file ? "" : "  — 생성 안 됨"}`),
       "",
     ].join("\r\n");
     await writeFileAtomic(path.join(dir, "sheet.txt"), legend).catch(() => notes.push("sheet.txt(번호 대응표)를 저장하지 못했습니다."));
@@ -171,7 +183,7 @@ export async function runCompare(args: CompareArgs, ctx: GenerateContext): Promi
       seed,
       basePrompt,
       presets: r.presetNames,
-      variants: outVariants.map(({ n, label, prompt, file }) => ({ n, label, prompt, file })),
+      variants: outVariants.map(({ n, label, prompt, file, baseline }) => ({ n, label, prompt, file, ...(baseline ? { baseline } : {}) })),
     };
     await ctx.sheets.add(record).catch(() => notes.push("비교 시트 기록을 저장하지 못했습니다."));
   }

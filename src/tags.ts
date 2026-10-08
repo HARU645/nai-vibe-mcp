@@ -1,13 +1,17 @@
-// 태그 확인: Claude가 떠올린 태그(특히 아티스트 태그)가 NovelAI에 실제로 있는지 자동완성으로 확인한다.
-// Claude는 작가 이름 철자를 틀리거나 없는 이름을 지어낼 수 있어서, Anlas를 쓰기 전에 거르는 용도.
+// 태그 확인: Claude가 떠올린 태그가 NovelAI 자동완성에 있는지 확인한다 (무료).
+// 실측(2026-10-08): 자동완성은 일반 태그·캐릭터·작품은 다 보여 주지만, 현대 작가 태그(artist:wlop 등)는
+// 모델이 알아도 보여 주지 않는다 (옛날 화가 일부만 나옴). 그래서 artist: 태그가 안 나오면 "없음"이 아니라
+// "unlisted(확인 불가)"로 두고, 작가 태그는 비교 시트에서 기준 칸과 비교해 확인한다.
 
 import { NaiApiError, type NaiClient, type TagSuggestion } from "./api/client.js";
 
 export type TagStatus =
   /** 같은 태그가 있음 */
   | "found"
-  /** `artist:이름`으로 물었는데 같은 이름의 일반 태그만 있음 (아티스트로는 확인 안 됨) */
+  /** `artist:이름`으로 물었는데 같은 이름의 일반 태그만 있음 (작가가 아니라 일반 태그) */
   | "general_only"
+  /** `artist:이름`이 자동완성에 없음. NovelAI가 작가 태그를 숨겨서 있는지 없는지 알 수 없음 */
+  | "unlisted"
   | "not_found"
   /** 이 태그만 검색하다 오류 */
   | "error";
@@ -80,7 +84,7 @@ export function judge(list: TagSuggestion[], query: string): Omit<TagCheck, "que
     // 아티스트로 물었는데 같은 이름의 일반 태그만 있으면 "있음"으로 치지 않는다 (artist:sketch 같은 지어낸 이름 걸러내기)
     const general = uniq.get(plainName(want));
     if (general) return { status: "general_only", found: false, match: general, suggestions };
-    return { status: "not_found", found: false, suggestions };
+    return { status: "unlisted", found: false, suggestions };
   }
   // 접두어 없이 물었으면 같은 이름의 아티스트 태그도 맞는 걸로 (올바른 표기를 알려 주려고)
   const asArtist = uniq.get(`artist:${want}`);
@@ -97,7 +101,7 @@ export async function checkTags(client: NaiClient, modelId: string, queries: str
       let list = await client.suggestTags(modelId, search);
       let r = judge(list, query);
       // `artist:`를 붙여 검색해서 못 찾았으면 이름만으로 한 번 더 (검색이 접두어를 다르게 다룰 수 있어서)
-      if (r.status === "not_found" && /^artist\s*:/i.test(search)) {
+      if (r.status === "unlisted" && /^artist\s*:/i.test(search)) {
         const plain = search.replace(/^artist\s*:\s*/i, "");
         if (plain) {
           list = [...list, ...(await client.suggestTags(modelId, plain))];

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { NaiApiError, anlasOf } from "./api/client.js";
 import { SAMPLERS } from "./api/request.js";
 import { accountStateOf, costPerImage } from "./cost/cost.js";
-import { DEFAULT_COMPARE_PROMPT, MAX_VARIANTS, MIN_VARIANTS, runCompare } from "./compare.js";
+import { DEFAULT_COMPARE_PROMPT, MAX_VARIANTS, MIN_VARIANTS, runCompare, variantLine } from "./compare.js";
 import { DEFAULT_STEPS, type GenerateContext, UserFacingError, requireToken, runGenerate } from "./generate.js";
 import { MODELS, resolveModel } from "./models.js";
 import { joinTags } from "./prompt/syntax.js";
@@ -323,6 +323,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
           }
           const v = rec.variants.find((x) => x.n === want.number);
           if (!v) throw new UserFacingError(`비교 시트 ${rec.id}에는 ${want.number}번이 없습니다 (1~${rec.variants.length}번).`);
+          if (v.baseline || !v.prompt) throw new UserFacingError(`비교 시트 ${rec.id}의 ${v.n}번은 기준 칸이라 저장할 화풍 태그가 없습니다.`);
           if (!v.file) {
             throw new UserFacingError(
               `비교 시트 ${rec.id}의 ${v.n}번은 생성되지 않은 칸이라 저장하지 않았습니다. 태그(${v.prompt})를 직접 prompt로 저장하거나 다시 비교해 주세요.`,
@@ -375,10 +376,10 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
     {
       title: "NovelAI 태그 확인",
       description: [
-        "태그(특히 아티스트 태그)가 NovelAI에 실제로 있는지 NovelAI 웹 자동완성으로 확인한다. Anlas가 들지 않는다.",
-        "아티스트 태그를 추천하거나 비교 시트에 넣기 전에 확인해서, 없거나 철자가 틀린 태그는 빼거나 suggestions의 태그로 고친다.",
-        "count는 NovelAI가 알려 주는 태그 수(클수록 모델이 잘 아는 편), confidence는 0~1. status: found | general_only(artist:로 물었는데 같은 이름의 일반 태그만 있음 → 아티스트로 쓰지 않음) | not_found | error.",
-        "섞기 문자열(0.6::artist:a::, 0.4::artist:b::)을 넣으면 태그별로 나눠 확인한다.",
+        "태그가 NovelAI 웹 자동완성에 있는지 확인한다 (Anlas 안 듦). 일반 태그·캐릭터·작품 태그의 철자와 실제 표기 확인용.",
+        "주의: NovelAI 자동완성은 현대 작가 태그(artist:wlop 등)를 모델이 알아도 보여 주지 않는다. artist: 태그가 unlisted로 나오는 건 정상이고 없다는 뜻이 아니다 — 빼지 말고 nai_compare(baseline: true)로 기준 칸과 비교해 확인한다.",
+        "status: found | general_only(artist:로 물었는데 같은 이름의 일반 태그만 있음 → 작가가 아니므로 artist: 없이 일반 태그로 쓴다) | unlisted(artist: 태그, 확인 불가) | not_found(일반 태그가 없음 → suggestions의 표기로 고친다) | error.",
+        "count는 NovelAI가 알려 주는 태그 사용량이고 10000에서 잘린다. 섞기 문자열(0.6::artist:a::, 0.4::artist:b::)은 태그별로 나눠 확인한다.",
       ].join("\n"),
       inputSchema: {
         tags: z.array(z.string().min(1)).min(1).max(20).describe("확인할 태그. 아티스트는 artist:이름 (예: artist:wlop)"),
@@ -406,20 +407,26 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
           throw e;
         }
         const lines = [`태그 확인 (NovelAI 자동완성, ${model.label}):`];
+        const countLabel = (n: number) => (n >= 10_000 ? "10,000+" : fmt(n));
         for (const t of results) {
-          const near = t.suggestions.map((x) => `${x.tag} (${fmt(x.count)})`).join(", ");
+          const near = t.suggestions.map((x) => `${x.tag} (${countLabel(x.count)})`).join(", ");
           if (t.status === "found" && t.match) {
             const same = t.match.tag.toLowerCase() === t.query.toLowerCase();
-            lines.push(
-              `✅ ${t.query} — 있음${same ? "" : ` (NovelAI 표기: ${t.match.tag})`} · 수 ${fmt(t.match.count)} · 신뢰도 ${t.match.confidence.toFixed(2)}`,
-            );
+            lines.push(`✅ ${t.query} — 있음${same ? "" : ` (NovelAI 표기: ${t.match.tag})`} · 사용량 ${countLabel(t.match.count)}`);
           } else if (t.status === "general_only" && t.match) {
-            lines.push(`⚠️ ${t.query} — 아티스트 태그로는 없음. 같은 이름의 일반 태그(${t.match.tag})만 있습니다`);
+            lines.push(`⚠️ ${t.query} — 작가 태그가 아니라 일반 태그입니다. artist: 없이 "${t.match.tag}"로 쓰세요`);
+          } else if (t.status === "unlisted") {
+            lines.push(`❔ ${t.query} — 자동완성에 없음 (확인 불가)`);
           } else if (t.status === "error") {
             lines.push(`❔ ${t.query} — 확인 중 오류: ${t.error}`);
           } else {
             lines.push(`❌ ${t.query} — 없음${near ? `. 비슷한 태그: ${near}` : " (비슷한 태그도 없음)"}`);
           }
+        }
+        if (results.some((t) => t.status === "unlisted")) {
+          lines.push(
+            "❔ NovelAI 자동완성은 현대 작가 태그 대부분을 보여 주지 않습니다. 모델이 아는 태그인지는 비교 시트에서 기준 칸(작가 태그 없음)과 비교해 확인해야 합니다.",
+          );
         }
         if (results.length > 1 && results.every((t) => t.status === "not_found" && t.suggestions.length === 0)) {
           lines.push("모든 태그가 빈 결과입니다. NovelAI 태그 검색이 바뀌었을 수 있으니 비교 시트로 직접 확인해 주세요.");
@@ -455,8 +462,9 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
       title: "NovelAI 비교 시트",
       description: [
         "같은 시드·같은 장면에 칸마다 다른 태그(주로 아티스트·화풍 조합)만 바꿔 뽑고, 번호 붙은 비교 이미지 한 장으로 보여 준다. 화풍 찾기용.",
-        `variants는 ${MIN_VARIANTS}~${MAX_VARIANTS}칸. 각 칸의 prompt는 그 칸에만 들어가는 태그이고 장면 태그 앞에 붙는다. 아티스트는 artist:이름, 섞기는 가중치 문법(예: 0.6::artist:a::, 0.4::artist:b::).`,
-        "아티스트 태그는 먼저 nai_tags로 있는지 확인하고 넣는다. 사용자가 고른 번호는 nai_preset save + from_sheet {number}로 저장한다.",
+        `칸은 기준 칸 포함 ${MIN_VARIANTS}~${MAX_VARIANTS}칸. 각 칸의 prompt는 그 칸에만 들어가는 태그이고 장면 태그 앞에 붙는다. 아티스트는 artist:이름, 섞기는 가중치 문법(예: 0.6::artist:a::, 0.4::artist:b::).`,
+        "baseline: true면 마지막에 칸 태그 없는 기준 칸을 넣는다. NovelAI 자동완성으로는 현대 작가 태그를 확인할 수 없으므로, 처음 보는 작가 후보를 비교할 때는 기준 칸을 넣고 기준과 거의 같은 칸은 모델이 모르는 태그일 수 있다고 알려 준다.",
+        "사용자가 고른 번호는 nai_preset save + from_sheet {number}로 저장한다.",
         "비용은 시트 전체를 한 번에 확인받는다 (nai_generate와 같은 confirm_id 방식). 크기를 안 정하면 Opus + V4.5는 portrait(무료), 그 밖엔 small_portrait(비용 절약).",
       ].join("\n"),
       inputSchema: {
@@ -467,8 +475,9 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
               label: z.string().optional().describe("사람이 읽을 이름 (없으면 prompt)"),
             }),
           )
-          .min(MIN_VARIANTS)
+          .min(1)
           .max(MAX_VARIANTS),
+        baseline: z.boolean().optional().describe("마지막에 칸 태그 없는 기준 칸 추가 (한 장 더 듦)"),
         prompt: z.string().optional().describe(`모든 칸에 공통으로 넣을 장면 태그. 없으면 기본 장면: ${DEFAULT_COMPARE_PROMPT}`),
         negative: z.string().optional(),
         model: z.string().optional().describe(`모델: ${MODELS.map((m) => m.key).join(", ")} (기본 ${config.defaultModel.key})`),
@@ -506,9 +515,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
         }
         lines.push(`✅ 비교 시트 ${made}/${r.variants.length}칸 (${head})`);
         lines.push(`시트: ${r.sheetFile ?? "(이미지 없음)"} · id ${r.sheetId}`);
-        for (const v of r.variants) {
-          lines.push(`${v.n}. ${v.prompt}${v.label !== v.prompt ? `  (${v.label})` : ""}${v.file ? "" : "  — 생성 안 됨"}`);
-        }
+        for (const v of r.variants) lines.push(`${v.n}. ${variantLine(v)}${v.file ? "" : "  — 생성 안 됨"}`);
         if (r.spent !== null) lines.push(`Anlas: ${r.spent} 사용 → 잔액 ${r.anlasAfter}`);
         else lines.push(r.estimate.free ? "Anlas: 무료 조건" : `Anlas: 약 ${r.estimate.perImage * made} 사용 (잔액 확인 실패)`);
         if (r.error) {
@@ -538,7 +545,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
             height: r.height,
             steps: r.steps,
             base_prompt: r.basePrompt,
-            variants: r.variants.map((v) => ({ n: v.n, label: v.label, prompt: v.prompt, path: v.file })),
+            variants: r.variants.map((v) => ({ n: v.n, label: v.label, prompt: v.prompt, path: v.file, baseline: v.baseline ?? false })),
             anlas_spent: r.spent,
             anlas_left: r.anlasAfter,
           },
