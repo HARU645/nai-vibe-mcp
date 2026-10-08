@@ -43,6 +43,14 @@ export interface Subscription {
   [k: string]: unknown;
 }
 
+export interface TagSuggestion {
+  tag: string;
+  /** NovelAI가 알려 주는 태그 수 (그 태그가 붙은 그림 수로 보임) */
+  count: number;
+  /** 0~1. NovelAI 웹에서 태그 옆 동그라미 진하기로 보여 주는 값으로 보임 */
+  confidence: number;
+}
+
 export interface ClientOptions {
   token: string | undefined;
   base?: string;
@@ -224,6 +232,34 @@ export class NaiClient {
         } catch (e) {
           throw new NaiApiError("bad_response", "구독 정보를 읽지 못했습니다.", res.status, String(e));
         }
+      });
+    });
+  }
+
+  /**
+   * 태그 자동완성 (NovelAI 웹 프롬프트 입력창이 쓰는 것). Anlas가 들지 않는다.
+   * 응답 형식은 오픈소스 클라이언트(novelai-python) 기준: { tags: [{ tag, count, confidence }] }
+   */
+  suggestTags(model: string, prompt: string, lang: "en" | "jp" = "en"): Promise<TagSuggestion[]> {
+    const q = new URLSearchParams({ model, prompt, lang });
+    return this.enqueue(async () => {
+      return this.send(`/ai/generate-image/suggest-tags?${q.toString()}`, { method: "GET" }, false, async (res) => {
+        const raw = await res.text();
+        let data: unknown;
+        try {
+          data = JSON.parse(raw);
+        } catch (e) {
+          throw new NaiApiError("bad_response", "태그 검색 결과를 읽지 못했습니다.", res.status, String(e));
+        }
+        const list = (data as { tags?: unknown })?.tags;
+        if (!Array.isArray(list)) return [];
+        return list
+          .filter((t): t is Record<string, unknown> => !!t && typeof t === "object" && typeof (t as { tag?: unknown }).tag === "string")
+          .map((t) => ({
+            tag: String(t.tag),
+            count: typeof t.count === "number" && Number.isFinite(t.count) ? t.count : 0,
+            confidence: typeof t.confidence === "number" && Number.isFinite(t.confidence) ? t.confidence : 0,
+          }));
       });
     });
   }

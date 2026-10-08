@@ -11,17 +11,17 @@ export interface Preview {
   height: number;
 }
 
-/** 긴 변을 maxSide로 줄인 JPEG. 알파는 흰 배경에 합성 */
-export function makePreview(png: Buffer, maxSide = 512, quality = 80): Preview {
-  const src = PNG.sync.read(png);
-  const scale = Math.min(1, maxSide / Math.max(src.width, src.height));
-  const w = Math.max(1, Math.round(src.width * scale));
-  const h = Math.max(1, Math.round(src.height * scale));
+export interface Rgba {
+  data: Uint8Array;
+  width: number;
+  height: number;
+}
+
+/** 상자 평균 축소: 대상 픽셀 하나가 덮는 원본 영역의 평균. 알파는 흰 배경에 합성해서 불투명 RGBA로 */
+export function boxResize(src: Rgba, w: number, h: number): Buffer {
   const out = Buffer.alloc(w * h * 4);
   const sx = src.width / w;
   const sy = src.height / h;
-
-  // 상자 평균 축소: 대상 픽셀 하나가 덮는 원본 영역의 평균
   for (let y = 0; y < h; y++) {
     const y0 = Math.floor(y * sy);
     const y1 = Math.max(y0 + 1, Math.min(src.height, Math.floor((y + 1) * sy)));
@@ -49,6 +49,16 @@ export function makePreview(png: Buffer, maxSide = 512, quality = 80): Preview {
       out[o + 3] = 255;
     }
   }
+  return out;
+}
+
+/** 긴 변을 maxSide로 줄인 JPEG. 알파는 흰 배경에 합성 */
+export function makePreview(png: Buffer, maxSide = 512, quality = 80): Preview {
+  const src = PNG.sync.read(png);
+  const scale = Math.min(1, maxSide / Math.max(src.width, src.height));
+  const w = Math.max(1, Math.round(src.width * scale));
+  const h = Math.max(1, Math.round(src.height * scale));
+  const out = boxResize(src, w, h);
   const encoded = jpeg.encode({ data: out, width: w, height: h }, quality);
   return { data: Buffer.from(encoded.data), mimeType: "image/jpeg", width: w, height: h };
 }

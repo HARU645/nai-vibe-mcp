@@ -3,7 +3,7 @@
   "name": "nai-vibe-mcp",
   "display_name": "NAI 바이브 짤뽑",
   "version": "0.0.0",
-  "description": "말로 NovelAI 그림 뽑기 — 비용 확인, 프리셋, 날짜별 저장 (비공식)",
+  "description": "말로 NovelAI 그림 뽑기 — 비용 확인, 화풍 찾기, 프리셋, 날짜별 저장 (비공식)",
   "long_description": "NovelAI 이미지 생성을 Claude에서 대화로 사용할 수 있게 해 주는 비공식 MCP 서버입니다. 한국어로 장면을 설명하면 Claude가 태그로 바꿔 그림을 생성하고, 그림은 내 PC 폴더에 날짜별로 저장됩니다. Anlas가 드는 요청은 예상 비용을 먼저 보여 주고, 확인을 받은 뒤에만 실행합니다. 자주 쓰는 화풍·캐릭터는 프리셋으로 저장해 둘 수 있습니다.\n\n필요한 것: NovelAI 계정과 Persistent API Token (NovelAI → User Settings → Account → Get Persistent API Token). 토큰은 이 설정 창에만 입력하고, 채팅에는 붙여넣지 마세요.\n\nNovelAI/Anlatan과 관계없는 개인 프로젝트입니다.",
   "author": {
     "name": "haru645",
@@ -47,6 +47,14 @@
     {
       "name": "nai_account",
       "description": "연결 확인, 구독·Anlas 잔액·V5 할당량"
+    },
+    {
+      "name": "nai_tags",
+      "description": "태그(아티스트 등)가 NovelAI에 있는지 확인 (무료)"
+    },
+    {
+      "name": "nai_compare",
+      "description": "같은 시드로 화풍·아티스트 조합을 나란히 비교하는 시트 만들기"
     },
     {
       "name": "nai_preset",

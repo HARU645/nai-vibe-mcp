@@ -64,10 +64,17 @@ afterEach(async () => {
 });
 
 describe("서버", () => {
-  it("도구 4개가 보인다", async () => {
+  it("도구 6개가 보인다", async () => {
     const { client } = await connect();
     const tools = await client.listTools();
-    expect(tools.tools.map((t) => t.name).sort()).toEqual(["nai_about", "nai_account", "nai_generate", "nai_preset"]);
+    expect(tools.tools.map((t) => t.name).sort()).toEqual([
+      "nai_about",
+      "nai_account",
+      "nai_compare",
+      "nai_generate",
+      "nai_preset",
+      "nai_tags",
+    ]);
   });
 
   it("토큰이 없으면 친절하게 알려 준다", async () => {

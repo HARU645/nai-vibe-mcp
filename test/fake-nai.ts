@@ -24,6 +24,10 @@ export interface FakeState {
   delayMs: number;
   /** 다음 생성 응답 한 번을 이상하게: drop = 본문 중간에 연결 끊기, stall = 헤더만 보내고 멈춤 */
   nextBody?: "drop" | "stall";
+  /** 태그 자동완성이 아는 태그들 (prompt가 들어 있는 것을 돌려줌) */
+  tagDb: Array<{ tag: string; count: number; confidence: number }>;
+  /** 태그 자동완성을 이 상태 코드로 실패시키기 */
+  suggestStatus?: number;
 }
 
 function tinyPng(): Buffer {
@@ -48,6 +52,12 @@ export async function startFakeNai(initial: Partial<FakeState> = {}) {
     requests: [],
     maxConcurrent: 0,
     delayMs: 5,
+    tagDb: [
+      { tag: "artist:wlop", count: 5123, confidence: 0.93 },
+      { tag: "artist:wlop (style)", count: 12, confidence: 0.2 },
+      { tag: "artist:ask (askzy)", count: 2311, confidence: 0.88 },
+      { tag: "silver hair", count: 182000, confidence: 0.99 },
+    ],
     ...initial,
   };
   let inFlight = 0;
@@ -84,6 +94,20 @@ export async function startFakeNai(initial: Partial<FakeState> = {}) {
           ...(state.usage ? { usage: state.usage } : {}),
         }),
       );
+      return;
+    }
+
+    if (req.method === "GET" && (req.url ?? "").startsWith("/ai/generate-image/suggest-tags")) {
+      if (state.suggestStatus) {
+        res.writeHead(state.suggestStatus, { "content-type": "application/json" });
+        res.end(JSON.stringify({ statusCode: state.suggestStatus, message: "fake" }));
+        return;
+      }
+      const q = new URL(req.url ?? "", "http://x").searchParams;
+      const want = (q.get("prompt") ?? "").toLowerCase();
+      const tags = state.tagDb.filter((t) => t.tag.toLowerCase().includes(want));
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ tags }));
       return;
     }
 
