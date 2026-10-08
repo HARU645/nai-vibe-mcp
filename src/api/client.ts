@@ -206,7 +206,7 @@ export class NaiClient {
   private async toError(res: Response, charged: boolean): Promise<NaiApiError> {
     let detail = "";
     try {
-      detail = scrubSecrets((await res.text()).slice(0, 500), this.opts.token);
+      detail = scrubSecrets((await res.text()).slice(0, 500), this.opts.token).trim();
     } catch {
       /* ignore */
     }

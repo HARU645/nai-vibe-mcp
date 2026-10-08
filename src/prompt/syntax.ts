@@ -18,7 +18,16 @@ export function convertWeightSyntax(prompt: string): string {
     out = next;
   }
   // ComfyUI에서 쓰던 이스케이프 `\(` `\)`는 NAI에선 그냥 괄호
-  return out.replace(/\\([()])/g, "$1");
+  return fixDigitBeforeClose(out.replace(/\\([()])/g, "$1"));
+}
+
+/**
+ * 숫자로 끝나는 태그 바로 뒤에 가중치를 닫는 `::`가 오면(`0.5::artist:dishwasher1910::`)
+ * NovelAI가 `1910::`을 새 가중치 시작으로 읽어서 500 오류를 낸다 (2026-10-08 실측, 과금은 없음).
+ * 숫자와 `::` 사이에 공백을 넣으면 정상 → 글자 뒤에 붙은 숫자 + `::`만 고친다 (가중치 시작 `1.2::`는 그대로).
+ */
+export function fixDigitBeforeClose(prompt: string): string {
+  return prompt.replace(/([A-Za-z)\]}])(\d+)::/g, "$1$2 ::");
 }
 
 function trimNumber(n: number): string {

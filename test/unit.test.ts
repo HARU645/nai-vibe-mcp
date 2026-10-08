@@ -36,6 +36,12 @@ describe("문법 변환", () => {
     expect(convertWeightSyntax("(artist:foo:1.3)")).toBe("1.3::artist:foo::");
     expect(convertWeightSyntax("artist:foo")).toBe("artist:foo");
   });
+  it("숫자로 끝나는 태그 뒤 닫는 :: 앞에 공백 (NovelAI 500 방지)", () => {
+    expect(convertWeightSyntax("0.5::artist:dishwasher1910::, 1.2::k9999::")).toBe("0.5::artist:dishwasher1910 ::, 1.2::k9999 ::");
+    expect(convertWeightSyntax("(artist:as109:1.2)")).toBe("1.2::artist:as109 ::");
+    // 가중치 시작 숫자와 괄호로 끝나는 태그는 그대로
+    expect(convertWeightSyntax("1.2::alice (as109)::, 0.8::tag::")).toBe("1.2::alice (as109)::, 0.8::tag::");
+  });
   it("쉼표·공백 정리", () => {
     expect(tidyPrompt(" 1girl ,, solo,  smile , ")).toBe("1girl, solo, smile");
     expect(joinTags("a, b,", undefined, "", " c ")).toBe("a, b, c");
