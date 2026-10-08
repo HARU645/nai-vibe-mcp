@@ -101,7 +101,7 @@ describe("생성 + 비용 가드", () => {
     const args = { prompt: "1girl, solo, smile", size: "portrait", steps: 23 };
     const r1: any = await client.callTool({ name: "nai_generate", arguments: args });
     expect(r1.structuredContent.status).toBe("needs_confirmation");
-    expect(r1.structuredContent.estimated_anlas).toBe(26);
+    expect(r1.structuredContent.estimated_anlas).toBe(17);
     expect(fake.generateBodies().length).toBe(0);
 
     const r2: any = await client.callTool({
@@ -109,8 +109,8 @@ describe("생성 + 비용 가드", () => {
       arguments: { ...args, confirm_id: r1.structuredContent.confirm_id },
     });
     expect(r2.structuredContent.status).toBe("done");
-    expect(r2.structuredContent.anlas_spent).toBe(26);
-    expect(r2.structuredContent.anlas_left).toBe(974);
+    expect(r2.structuredContent.anlas_spent).toBe(17);
+    expect(r2.structuredContent.anlas_left).toBe(983);
     const file = r2.structuredContent.images[0].path as string;
     expect(file.startsWith(outDir)).toBe(true);
     expect((await fs.stat(file)).size).toBeGreaterThan(50);
@@ -137,7 +137,7 @@ describe("생성 + 비용 가드", () => {
 
     // 비용 기록
     const ledger = await fs.readFile(path.join(outDir, ".nai-vibe", "ledger.jsonl"), "utf8");
-    expect(JSON.parse(ledger.trim().split("\n").pop()!)).toMatchObject({ estimated: 26, actual: 26 });
+    expect(JSON.parse(ledger.trim().split("\n").pop()!)).toMatchObject({ estimated: 17, actual: 17 });
   });
 
   it("confirm_id를 다른 요청에 쓰면 실행 안 한다", async () => {
@@ -220,7 +220,7 @@ describe("오류", () => {
     expect(textOf(r)).toContain("500");
     // 잔액 차이를 기록해 둔다
     const ledger = await fs.readFile(path.join(outDir, ".nai-vibe", "ledger.jsonl"), "utf8");
-    expect(JSON.parse(ledger.trim())).toMatchObject({ generated: 0, actual: 26 });
+    expect(JSON.parse(ledger.trim())).toMatchObject({ generated: 0, actual: 17 });
   });
 
   it("여러 장 중간에 실패하면 된 것까지 돌려준다", async () => {
@@ -335,10 +335,10 @@ describe("리뷰에서 나온 경우들", () => {
     const { client } = await connect();
     const r1: any = await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } });
     expect(r1.structuredContent.status).toBe("done");
-    expect(r1.structuredContent.anlas_spent).toBe(26);
+    expect(r1.structuredContent.anlas_spent).toBe(17);
     const r2: any = await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } });
     expect(r2.structuredContent.status).toBe("needs_confirmation");
-    expect(r2.structuredContent.estimated_anlas).toBe(26);
+    expect(r2.structuredContent.estimated_anlas).toBe(17);
     expect(fake.generateBodies().length).toBe(1);
   });
 
@@ -346,7 +346,7 @@ describe("리뷰에서 나온 경우들", () => {
     fake.state.tier = 3;
     fake.state.active = true;
     const { client } = await connect({ NAI_SESSION_LIMIT: "20" });
-    await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } }); // 26 빠짐
+    await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } }); // 17 빠짐
     const r: any = await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } });
     expect(r.structuredContent.status).toBe("blocked");
     expect(fake.generateBodies().length).toBe(1);
@@ -358,9 +358,9 @@ describe("리뷰에서 나온 경우들", () => {
     const r: any = await client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } });
     expect(r.isError).toBe(true);
     expect(textOf(r)).toContain("빠졌을 수도");
-    expect(ctx.guard.sessionSpent).toBe(26);
+    expect(ctx.guard.sessionSpent).toBe(17);
     const ledger = await fs.readFile(path.join(outDir, ".nai-vibe", "ledger.jsonl"), "utf8");
-    expect(JSON.parse(ledger.trim())).toMatchObject({ generated: 0, actual: 26 });
+    expect(JSON.parse(ledger.trim())).toMatchObject({ generated: 0, actual: 17 });
   });
 
   it("헤더만 오고 멈추면 타임아웃으로 끝나고 다음 요청이 막히지 않는다", async () => {
@@ -392,9 +392,9 @@ describe("리뷰에서 나온 경우들", () => {
     const rs: any[] = await Promise.all(
       [0, 1, 2, 3, 4].map(() => client.callTool({ name: "nai_generate", arguments: { prompt: "1girl" } })),
     );
-    expect(rs.filter((r) => r.structuredContent?.status === "done").length).toBe(2);
-    expect(fake.generateBodies().length).toBe(2);
-    expect(ctx.guard.sessionSpent).toBe(52);
+    expect(rs.filter((r) => r.structuredContent?.status === "done").length).toBe(3);
+    expect(fake.generateBodies().length).toBe(3);
+    expect(ctx.guard.sessionSpent).toBe(51);
     expect(fake.state.maxConcurrent).toBe(1);
   });
 

@@ -5,7 +5,10 @@ import type { ModelFamily, ModelInfo } from "../models.js";
 import { anlasOf, type Subscription } from "../api/client.js";
 
 export interface CostRule {
-  /** 픽셀 비용에 곱하는 값. 1.5는 MooshieUI가 실제 과금 2건으로 찾은 값, 개발자 실테스트로 확정할 것 */
+  /**
+   * 픽셀 비용에 곱하는 값. 2026-10-08 비구독 계정 실측 (docs/api-notes.md 8장):
+   * V4.5 Full·Curated = 1.0 (512²·10스텝 → 3, 832x1216·28스텝 → 20), V5 Full·Curated = 1.5 (→ 5, 30)
+   */
   factor: number;
   minPerImage: number;
   maxPerImage: number;
@@ -13,7 +16,7 @@ export interface CostRule {
 
 export const COST_RULES: Record<ModelFamily, CostRule> = {
   v5: { factor: 1.5, minPerImage: 2, maxPerImage: 140 },
-  "v4.5": { factor: 1.5, minPerImage: 2, maxPerImage: 140 },
+  "v4.5": { factor: 1.0, minPerImage: 2, maxPerImage: 140 },
 };
 
 const PIXEL_COEFFICIENT = 2.951823174884865e-6;

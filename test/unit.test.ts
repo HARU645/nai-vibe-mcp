@@ -158,11 +158,15 @@ describe("크기", () => {
 });
 
 describe("비용", () => {
-  it("공식 (×1.5)", () => {
-    expect(costPerImage(m("v4.5-full"), 832, 1216, 28)).toBe(30);
-    expect(costPerImage(m("v4.5-full"), 832, 1216, 29)).toBe(30);
-    expect(costPerImage(m("v4.5-full"), 1088, 1088, 28)).toBe(35);
+  it("공식: V4.5 ×1.0, V5 ×1.5 (실측값)", () => {
+    expect(costPerImage(m("v4.5-full"), 512, 512, 10)).toBe(3);
+    expect(costPerImage(m("v4.5-curated"), 512, 512, 10)).toBe(3);
+    expect(costPerImage(m("v4.5-full"), 832, 1216, 28)).toBe(20);
+    expect(costPerImage(m("v4.5-full"), 512, 768, 23)).toBe(7);
     expect(costPerImage(m("v5-full"), 512, 512, 10)).toBe(5);
+    expect(costPerImage(m("v5-curated"), 512, 512, 10)).toBe(5);
+    expect(costPerImage(m("v5-full"), 832, 1216, 28)).toBe(30);
+    expect(costPerImage(m("v5-full"), 1088, 1088, 28)).toBe(35);
     expect(costPerImage(m("v5-full"), 64, 64, 1)).toBe(2);
   });
   const opus = accountStateOf({ tier: 3, active: true, trainingStepsLeft: { fixedTrainingStepsLeft: 10, purchasedTrainingSteps: 5 } });
@@ -181,8 +185,8 @@ describe("비용", () => {
   });
   it("Opus V4.5: 조건 안이면 무료, 넘으면 유료", () => {
     expect(estimateCost(m("v4.5-full"), 832, 1216, 28, 2, opus).total).toBe(0);
-    expect(estimateCost(m("v4.5-full"), 832, 1216, 29, 1, opus).total).toBe(30);
-    expect(estimateCost(m("v4.5-full"), 1088, 1088, 28, 1, opus).total).toBe(35);
+    expect(estimateCost(m("v4.5-full"), 832, 1216, 29, 1, opus).total).toBe(20);
+    expect(estimateCost(m("v4.5-full"), 1088, 1088, 28, 1, opus).total).toBe(23);
   });
   it("Opus V5: 할당량이 있으면 무료, 비었으면 유료", () => {
     expect(estimateCost(m("v5-full"), 832, 1216, 23, 1, opusV5(50)).free).toBe(true);
@@ -191,7 +195,7 @@ describe("비용", () => {
     expect(estimateCost(m("v5-full"), 832, 1216, 23, 4, opusV5(0.1)).free).toBe(false);
   });
   it("비구독·만료·계정 모름은 유료", () => {
-    expect(estimateCost(m("v4.5-full"), 832, 1216, 23, 3, free).total).toBe(26 * 3);
+    expect(estimateCost(m("v4.5-full"), 832, 1216, 23, 3, free).total).toBe(17 * 3);
     expect(estimateCost(m("v4.5-full"), 832, 1216, 23, 1, expired).free).toBe(false);
     expect(estimateCost(m("v4.5-full"), 832, 1216, 23, 1, null).free).toBe(false);
   });

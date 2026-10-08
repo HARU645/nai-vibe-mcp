@@ -120,7 +120,7 @@ tag_hint_uc_preset 번호: 0 없음 / 2 Heavy / 3 Light / 4 Human Focus / 5 Furr
 ### 4-3. 그 밖의 문법
 
 - 가중치: `1.2::tag::` (음수도 됨, 예 `-0.8::feet::`), `{tag}` ×1.05, `[tag]` ÷1.05. ComfyUI식 `(tag:1.2)` → `1.2::tag::`로 변환
-- 아티스트: 보통 `artist:이름`으로 씀. **MooshieUI는 보내기 전에 `artist:` 접두어를 지움** (단부루 학습 데이터엔 맨 이름만 있어서 토큰 낭비라는 주장). 공식 근거는 못 찾음 → 그대로 보내고, 실테스트에서 같은 시드로 비교 (불확실)
+- 아티스트: 보통 `artist:이름`으로 씀. MooshieUI는 보내기 전에 `artist:` 접두어를 지움 (토큰 낭비라는 주장). 실테스트(9장 7번)에선 있든 없든 화풍이 똑같이 먹음 → 우리는 그대로 보냄
 - V5 글씨: 따옴표 안 글자를 프롬프트 끝 `Text: …` 블록으로 모으면 그려 줌. 사용자가 직접 `Text:` 줄을 쓰면 자동 변환 안 함. 여러 조각은 빈 줄로 구분
 - V5 투명 배경: 요청 필드가 아니라 프롬프트 태그 (MooshieUI의 `TRANSPARENCY_TAG`). V5만 실제 알파가 나옴. v1에선 안 다룸
 
@@ -165,43 +165,47 @@ tag_hint_uc_preset 번호: 0 없음 / 2 Heavy / 3 Light / 4 Human Focus / 5 Furr
 ```
 px    = max(width * height, 65536)
 base  = ceil(2.951823174884865e-6 * px + 5.753298233447344e-7 * px * steps)
-1장   = max(ceil(base * 1.5 * strength), 2)      // strength: txt2img는 1
+1장   = max(ceil(base * 계수 * strength), 2)     // strength: txt2img는 1
+계수  = V4.5 1.0, V5 1.5                            // 2026-10-08 실측
 ```
 
 - 계수 두 개는 세 출처가 같음 (웹 클라이언트 비용 함수에서 나온 값)
-- **×1.5는 MooshieUI에만 있음.** SDK·NekoAI-JS에는 없음. MooshieUI는 실제 과금 두 건으로 맞췄다고 기록: 1088x1088 28스텝 → 35, 832x1216 29스텝 → 30 (×1.5 없으면 23, 20). 같은 문서의 "모르는 것" 목록에는 아직 미확인이라고 적혀 있어서, **우리 실테스트 1순위**
+- **계수는 모델 세대마다 다름 — 확인됨 (2026-10-08, 비구독 계정 실측, 아래 9장 결과).** V4.5 Full·Curated는 ×1.0 (SDK·NekoAI-JS와 같음), V5 Full·Curated는 ×1.5 (MooshieUI가 찾은 값. MooshieUI는 V5만 써서 전체에 붙인 걸로 보임)
 - 무료(Opus): `Opus && px ≤ 1,048,576 && steps ≤ 28 && txt2img` 이면 0. 여러 장(n_samples > 1)이면 SDK·NekoAI-JS는 첫 장만 무료, 공식 문서는 "여러 장은 항상 Anlas" → 우리는 항상 1장씩 보내서 이 차이를 피함
 - V5: Opus여도 `usage`가 비었으면(`isNegative` 또는 `percent <= 0`) 무료 아님
 - 비구독 (개발자 계정 포함): 전부 유료
 - 장당 상한 140 (SDK, 넘으면 요청 거부)
 - 비용 조회 API는 없음. 생성 전후 잔액 차이로 검증
 
-| 크기 · 스텝 | ×1.0 | ×1.5 |
+| 크기 · 스텝 | V4.5 (×1.0) | V5 (×1.5) |
 |---|---|---|
 | 512x512 · 10 | 3 | 5 |
-| 512x768 · 28 | 8 | 12 |
+| 512x768 · 23 | 7 | 11 |
 | 832x1216 · 23 (웹 기본) | 17 | 26 |
 | 832x1216 · 28 | 20 | 30 |
 | 1024x1024 · 28 | 20 | 30 |
 | 1088x1088 · 28 | 23 | 35 |
 | 1024x1536 · 28 | 30 | 45 |
 
-→ ×1.5가 맞으면 Anlas 10,000으로 일반 크기 약 330장 (×1.0이면 약 500장)
+→ Anlas 10,000으로 일반 크기(28스텝) V4.5 약 500장, V5 약 330장
 
-## 9. 실테스트 목록 (개발자 계정, Anlas 사용)
+## 9. 실테스트 (개발자 비구독 계정) — 2026-10-08 결과
 
-순서대로. 형식 확인은 512x512·10스텝(5 Anlas 안팎)으로.
+| # | 확인 | 결과 |
+|---|---|---|
+| 1 | `/user/subscription` 비구독 응답 | tier 0, active false, `usage` 없음, 잔액은 `trainingStepsLeft` 합 — 예상대로 |
+| 2 | V4.5 Full 512x512·10 | 생성 됨, **3 Anlas** (×1.0) |
+| 3 | V5 Full 512x512·10 | **5 Anlas** (×1.5) |
+| 4 | 832x1216·28 | V4.5 Full **20**, V5 Full **30** |
+| 4b | Curated | V4.5 Curated 3, V5 Curated 5 (Full과 같은 계수) |
+| 5 | PNG 메타데이터 | tEXt `Description`·`Comment.prompt`·`v4_prompt.base_caption` 전부 우리가 보낸 최종 프롬프트와 같음. `uc`도 같음. V5 PNG의 `Comment`엔 `tag_hint_qt`·`tag_hint_uc_preset`·`model_name`·`quality_boost`·`upscale` 등이 더 있음. `Source`는 "NovelAI Diffusion V4.5 4BDE2A90" / "NovelAI Diffusion V5 0ADF9AB7" |
+| 6 | V4 Curated id | v1이 V4를 안 써서 건너뜀 |
+| 7 | `artist:` 접두어 | `artist:wlop`과 `wlop` 둘 다 화풍이 똑같이 먹고 구도만 조금 다름 (같은 시드, V4.5 Full 512x768) → **지우지 않고 사용자가 쓴 대로 보냄** |
+| 8 | 큐 | 한 번에 하나씩만 보냄 (가짜 서버 테스트로 확인) |
 
-1. `/user/subscription` — 비구독 계정의 tier·active·잔액·usage 모양 (무료)
-2. 비구독 계정으로 V4.5 Full 1장 생성 → 되는지, 잔액 차이로 ×1.0/×1.5 판정
-3. 같은 설정으로 V5 Full 1장 → V5도 같은 공식인지
-4. 832x1216·28스텝 1장 (V4.5, V5 각각) → 일반 크기 비용 확정
-5. zip 엔트리 이름, PNG `Comment` 안의 `input`/프롬프트가 우리가 보낸 것과 같은지
-6. V4 Curated id 둘 중 어느 쪽이 되는지 (400이면 과금 없음)
-7. `artist:` 접두어 있음/없음 같은 시드 비교 (2장)
-8. 429: 일부러 두 요청을 겹쳐 보내지는 않음 (약관 취지). 우리 큐가 한 번에 하나만 보내는지만 확인
-
-예상 사용량: 1~8 합쳐서 약 150 Anlas. 이후 1단계 기능 확인에 300~500 정도.
+- 쓴 Anlas: 테스트 9장 합계 87
+- 응답은 zip(image_0.png), 생성 시간 1~2초대 (`Generation_time` 0.77s / 2.26s)
+- `use_new_shared_trial`은 안 넣어도 비구독 계정 생성에 문제없음
 
 ### Opus 테스터만 확인 가능
 
@@ -216,5 +220,5 @@ base  = ceil(2.951823174884865e-6 * px + 5.753298233447344e-7 * px * steps)
 - 품질 태그·UC·nsfw 가드는 우리가 웹과 같게 조립하고 `tag_hint_*`만 보냄
 - `n_samples`는 항상 1. 여러 장은 순서대로 한 장씩, 큐는 한 번에 하나
 - 요청이 나간 뒤엔 자동 재시도 없음 (429만 예외). 생성 전후 잔액을 기록
-- 비용 공식은 `src/cost/`에 표 하나로 두고 ×1.5 같은 계수를 모델별로 바꿀 수 있게 (V5 정책이 바뀔 때 대비)
+- 비용 공식은 `src/cost/cost.ts`의 `COST_RULES` 표 하나로 (모델 세대별 계수, V4.5 1.0 / V5 1.5)
 - v1 모델: V5 Full·Curated, V4.5 Full·Curated

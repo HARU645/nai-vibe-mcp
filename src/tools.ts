@@ -100,17 +100,18 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
       ctx.updates.poke();
       try {
         const r = await ctx.serial.run(() => runGenerate(args, ctx));
+        // 어떤 앱은 structuredContent만 보여 줘서, 사람이 읽을 글을 message에도 같이 넣는다
         if (r.status === "blocked") {
-          return {
-            content: [text(withNotice([`⛔ 생성 안 함. ${r.message}`], ctx))],
-            structuredContent: { status: "blocked", message: r.message },
-          };
+          const msg = withNotice([`⛔ 생성 안 함. ${r.message}`], ctx);
+          return { content: [text(msg)], structuredContent: { status: "blocked", message: msg } };
         }
         if (r.status === "needs_confirmation") {
+          const msg = withNotice([r.message, `confirm_id: ${r.confirmId}`], ctx);
           return {
-            content: [text(withNotice([r.message, `confirm_id: ${r.confirmId}`], ctx))],
+            content: [text(msg)],
             structuredContent: {
               status: "needs_confirmation",
+              message: msg,
               confirm_id: r.confirmId,
               estimated_anlas: r.estimate.total,
               per_image: r.estimate.perImage,
@@ -127,10 +128,11 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
           }
           if (r.spent !== null) lines.push(`잔액 확인: ${r.spent} 차감 → 남은 ${r.anlasAfter}`);
           lines.push(...r.notes);
+          const msg = withNotice(lines, ctx);
           return {
             isError: true,
-            content: [text(withNotice(lines, ctx))],
-            structuredContent: { status: "failed", error: r.error.kind, anlas_spent: r.spent, anlas_left: r.anlasAfter },
+            content: [text(msg)],
+            structuredContent: { status: "failed", message: msg, error: r.error.kind, anlas_spent: r.spent, anlas_left: r.anlasAfter },
           };
         }
         lines.push(`✅ ${r.images.length}장 생성 (${r.model.label})`);
@@ -141,7 +143,8 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
           lines.push(`⚠️ ${r.images.length + 1}번째에서 멈췄어: ${r.error.message}${r.error.detail ? ` (${r.error.detail})` : ""}`);
         }
         lines.push(...r.notes);
-        const content: CallToolResult["content"] = [text(withNotice(lines, ctx))];
+        const msg = withNotice(lines, ctx);
+        const content: CallToolResult["content"] = [text(msg)];
         for (const im of r.images) {
           if (im.preview) content.push({ type: "image", data: im.preview.data.toString("base64"), mimeType: im.preview.mimeType });
         }
@@ -149,6 +152,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
           content,
           structuredContent: {
             status: r.error ? "partial" : "done",
+            message: msg,
             model: r.model.key,
             images: r.images.map((im) => ({ path: im.path, seed: im.seed, width: im.width, height: im.height })),
             anlas_spent: r.spent,
@@ -199,15 +203,24 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
           `이번 세션에 쓴 Anlas: 약 ${ctx.guard.sessionSpent}${ctx.guard.sessionLimit > 0 ? ` / 상한 ${ctx.guard.sessionLimit}` : ""}`,
           `저장 폴더: ${config.outputDir}`,
           "",
-          `예상 비용 (${m.key}, Opus 무료 조건 밖일 때, 장당):`,
-          `- 세로 832x1216 · ${DEFAULT_STEPS}스텝: ${costPerImage(m, 832, 1216, DEFAULT_STEPS)} / 28스텝: ${costPerImage(m, 832, 1216, 28)}`,
-          `- 작은 세로 512x768 · ${DEFAULT_STEPS}스텝: ${costPerImage(m, 512, 768, DEFAULT_STEPS)}`,
-          `- 큰 세로 1024x1536 · 28스텝: ${costPerImage(m, 1024, 1536, 28)}`,
+          "유료일 때 장당 예상 Anlas (V4.5 / V5):",
+          ...[
+            ["세로 832x1216", 832, 1216, DEFAULT_STEPS],
+            ["세로 832x1216", 832, 1216, 28],
+            ["작은 세로 512x768", 512, 768, DEFAULT_STEPS],
+            ["큰 세로 1024x1536", 1024, 1536, 28],
+          ].map(([label, w, h, s]) => {
+            const v45 = costPerImage(resolveModel("v4.5-full")!, w as number, h as number, s as number);
+            const v5 = costPerImage(resolveModel("v5-full")!, w as number, h as number, s as number);
+            return `- ${label} · ${s}스텝: ${v45} / ${v5}`;
+          }),
           "(비공식 추정치. 실제 차감은 생성할 때마다 잔액 차이로 확인해.)",
         );
+        const msg = withNotice(lines, ctx);
         return {
-          content: [text(withNotice(lines, ctx))],
+          content: [text(msg)],
           structuredContent: {
+            message: msg,
             tier: a.tierName,
             active: a.active,
             opus: a.opus,
@@ -263,7 +276,7 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
           );
           return {
             content: [text(lines.join("\n"))],
-            structuredContent: { presets: all.map((p) => ({ name: p.name, kind: p.kind })) },
+            structuredContent: { message: lines.join("\n"), presets: all.map((p) => ({ name: p.name, kind: p.kind })) },
           };
         }
         if (!args.name) throw new UserFacingError("프리셋 이름(name)을 줘.");
@@ -303,7 +316,8 @@ export function registerTools(server: McpServer, ctx: ToolContext): void {
           characters: args.characters,
           note: args.note,
         });
-        return { content: [text(`"${r.name}" 프리셋을 ${r.created ? "저장했어" : "덮어썼어"}.`)], structuredContent: { name: r.name, created: r.created } };
+        const saved = `"${r.name}" 프리셋을 ${r.created ? "저장했어" : "덮어썼어"}.`;
+        return { content: [text(saved)], structuredContent: { message: saved, name: r.name, created: r.created } };
       } catch (e) {
         return errorResult(e, ctx);
       }
