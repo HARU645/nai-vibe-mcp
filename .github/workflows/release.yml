@@ -1,34 +1,59 @@
-# v로 시작하는 태그를 올리면: 테스트 → .mcpb 빌드 → Release 만들고 파일 첨부
+# main에 올라온 package.json 버전의 Release가 아직 없으면:
+# 테스트 → .mcpb 빌드 → 태그 v<버전> + Release 만들고 파일 첨부.
+# 그래서 새 버전을 내려면 package.json 버전과 CHANGELOG.md만 올려서 main에 push하면 된다.
+# (Actions 탭에서 손으로 다시 돌릴 수도 있음)
 name: release
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: write
+concurrency:
+  group: release
+  cancel-in-progress: false
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npx tsc --noEmit
-      - run: npm test
-      - name: 태그와 package.json 버전이 같은지
-        run: |
-          v="${GITHUB_REF_NAME#v}"
-          p="$(node -p "require('./package.json').version")"
-          if [ "$v" != "$p" ]; then echo "태그 $v 와 package.json $p 가 달라"; exit 1; fi
-      - run: npm run pack:mcpb
-      - run: node scripts/release-notes.mjs "${GITHUB_REF_NAME#v}" > notes.md
-      - name: Release 만들기
+          fetch-depth: 0
+      - name: 이 버전 Release가 이미 있는지
+        id: v
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          v="$(node -p "require('./package.json').version")"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if gh release view "v$v" >/dev/null 2>&1; then
+            echo "v$v Release가 이미 있어서 건너뜀"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.v.outputs.skip == 'false'
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.v.outputs.skip == 'false'
+        run: npm ci
+      - if: steps.v.outputs.skip == 'false'
+        run: npx tsc --noEmit
+      - if: steps.v.outputs.skip == 'false'
+        run: npm test
+      - if: steps.v.outputs.skip == 'false'
+        run: npm run pack:mcpb
+      - if: steps.v.outputs.skip == 'false'
+        run: node scripts/release-notes.mjs "${{ steps.v.outputs.version }}" > notes.md
+      - name: Release 만들기
+        if: steps.v.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ steps.v.outputs.version }}
+        run: |
           pre=""
-          case "$GITHUB_REF_NAME" in v0.*) pre="--prerelease" ;; esac
-          gh release create "$GITHUB_REF_NAME" build/nai-vibe-mcp-*.mcpb \
-            --title "$GITHUB_REF_NAME" --notes-file notes.md $pre
+          case "$V" in 0.*) pre="--prerelease" ;; esac
+          gh release create "v$V" "build/nai-vibe-mcp-$V.mcpb" \
+            --target "$GITHUB_SHA" --title "v$V" --notes-file notes.md $pre
